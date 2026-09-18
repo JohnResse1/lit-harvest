@@ -17,6 +17,7 @@ from lit_harvest.services.dashboard import DashboardService
 from lit_harvest.services.maintenance import MaintenanceService
 from lit_harvest.services.normalization import NormalizationService
 from lit_harvest.services.papers import PaperService
+from lit_harvest.services.storage_settings import StorageSettingsService
 from lit_harvest.storage.database import Database
 from lit_harvest.storage.files import DocumentStorage
 
@@ -67,6 +68,7 @@ class ServiceContainer:
         )
         self.dashboard = DashboardService(self.database, self.storage, self.scheduler)
         self.maintenance = MaintenanceService(self.database, self.scheduler)
+        self.storage_settings = StorageSettingsService(self.config, self.database)
 
     def _sync_providers(self) -> None:
         elsevier = self.config.providers.elsevier

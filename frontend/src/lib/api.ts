@@ -38,6 +38,26 @@ export interface SearchOutcome {
   total_results: number | null;
 }
 
+export interface StorageInfo {
+  root: string;
+  papers: string;
+  database: string;
+  default_root: string;
+  is_default: boolean;
+  exists: boolean;
+  writable: boolean;
+  paper_directories: number;
+}
+
+export interface StorageValidation {
+  path: string;
+  ok: boolean;
+  message: string;
+  exists: boolean;
+  writable: boolean;
+  empty: boolean;
+}
+
 export interface InstanceInfo {
   instance_id: string;
   user: string;
@@ -48,6 +68,18 @@ export interface InstanceInfo {
 export const api = {
   overview: () => request<Overview>("/api/overview"),
   instance: () => request<InstanceInfo>("/api/instance"),
+  storage: () => request<StorageInfo>("/api/settings/storage"),
+  validateStorage: (path: string) =>
+    request<StorageValidation>(`/api/settings/storage/validate?path=${encodeURIComponent(path)}`),
+  changeStorage: (path: string, migrate: boolean, overwrite: boolean) =>
+    request<{ storage_root: string; migrated_papers: number; message: string }>(
+      "/api/settings/storage",
+      { method: "POST", body: JSON.stringify({ path, migrate, overwrite }) },
+    ),
+  resetStorage: () =>
+    request<{ storage_root: string; message: string }>("/api/settings/storage/reset?migrate=true", {
+      method: "POST",
+    }),
   worker: () => request<WorkerStatus>("/api/worker"),
   search: (query: string, maxResults: number, startYear?: number, endYear?: number) =>
     request<SearchOutcome>("/api/search", {

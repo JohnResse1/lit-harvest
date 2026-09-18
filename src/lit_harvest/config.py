@@ -163,7 +163,25 @@ def load_config(path: str | Path | None = None) -> AppConfig:
             raise ValueError(f"Configuration root must be a mapping: {selected}")
         raw = loaded
 
+    # Runtime overrides (for example a storage directory chosen in the web UI)
+    # take precedence over config.yaml, but are stored outside version control.
+    from lit_harvest.settings import SettingsStore
+
+    overrides: dict[str, Any] = {}
+    try:
+        stored = SettingsStore(selected).load()
+    except OSError:
+        stored = None
+    if stored is not None:
+        if stored.storage_root:
+            overrides.setdefault("storage", {})["root"] = stored.storage_root
+        if stored.database_url:
+            overrides.setdefault("database", {})["url"] = stored.database_url
+
     defaults = AppConfig().model_dump(mode="python")
-    model_config = AppConfig.model_validate(_merge(defaults, raw))
+    merged = _merge(defaults, raw)
+    if overrides:
+        merged = _merge(merged, overrides)
+    model_config = AppConfig.model_validate(merged)
     model_config.config_path = selected.resolve() if selected else None
     return model_config.resolve_paths()

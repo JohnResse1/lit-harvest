@@ -3,6 +3,7 @@ import { PapersPage } from "./pages/PapersPage";
 import { PaperDetailPage } from "./pages/PaperDetailPage";
 import { ProvidersPage } from "./pages/ProvidersPage";
 import { FailuresPage } from "./pages/FailuresPage";
+import { StoragePage } from "./pages/StoragePage";
 import { LanguageProvider, useLanguage } from "./lib/LanguageContext";
 import { api, type InstanceInfo } from "./lib/api";
 import { useEffect, useState } from "react";
@@ -13,6 +14,7 @@ function CurrentPage() {
   if (path === "/papers") return <PapersPage />;
   if (path === "/providers") return <ProvidersPage />;
   if (path === "/failures") return <FailuresPage />;
+  if (path === "/storage") return <StoragePage />;
   return <OverviewPage />;
 }
 
@@ -28,6 +30,7 @@ function Shell() {
     ["/papers", t("navPapers")],
     ["/providers", t("navProviders")],
     ["/failures", t("navFailures")],
+    ["/storage", t("navStorage")],
   ];
   return (
     <div className="app-shell">

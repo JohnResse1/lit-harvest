@@ -229,8 +229,63 @@ def auth_test(
         raise typer.Exit(code=1)
 
 
+storage_app = typer.Typer(help="Choose where papers and the database are stored.")
+app.add_typer(storage_app, name="storage")
+
 security_app = typer.Typer(help="Prevent accidental API-key publication.")
 app.add_typer(security_app, name="security")
+
+
+@storage_app.command("show")
+def storage_show(
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Show the active storage directory."""
+    paths = _container(config).storage_settings.describe()
+    table = Table(title="Storage")
+    table.add_column("Item")
+    table.add_column("Value")
+    table.add_row("Root", paths.root)
+    table.add_row("Papers", paths.papers)
+    table.add_row("Database", paths.database)
+    table.add_row("Default", paths.default_root)
+    table.add_row("Using default", "yes" if paths.is_default else "no")
+    table.add_row("Writable", "yes" if paths.writable else "no")
+    table.add_row("Paper folders", str(paths.paper_directories))
+    console.print(table)
+
+
+@storage_app.command("set")
+def storage_set(
+    path: Annotated[str, typer.Argument(help="Directory to store papers and the database.")],
+    migrate: Annotated[
+        bool,
+        typer.Option("--migrate/--no-migrate", help="Copy existing data to the new directory."),
+    ] = True,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Allow a non-empty target directory.")
+    ] = False,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Point this instance at a new storage directory."""
+    service = _container(config).storage_settings
+    try:
+        result = service.change(path, migrate=migrate, force=overwrite)
+    except Exception as exc:  # noqa: BLE001 - translated to guidance
+        _explain(exc)
+        return
+    _print_json(result)
+    console.print("[yellow]Restart lit-harvest for the change to take effect.[/yellow]")
+
+
+@storage_app.command("reset")
+def storage_reset(
+    migrate: Annotated[bool, typer.Option("--migrate/--no-migrate")] = True,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Go back to the default ./data directory."""
+    _print_json(_container(config).storage_settings.reset_to_default(migrate=migrate))
+    console.print("[yellow]Restart lit-harvest for the change to take effect.[/yellow]")
 
 
 @security_app.command("scan")

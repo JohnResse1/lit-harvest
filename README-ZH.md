@@ -340,6 +340,9 @@ http://127.0.0.1:8765/docs
 ```text
 lit-harvest version
 lit-harvest demo [--reset] [--clear]
+lit-harvest storage show
+lit-harvest storage set PATH [--migrate/--no-migrate] [--overwrite]
+lit-harvest storage reset [--migrate/--no-migrate]
 lit-harvest doctor  [--network] [--json] [--config PATH]
 
 lit-harvest auth set    [provider] [name] [--secret-ref REF] [--config PATH]
@@ -545,6 +548,7 @@ GET  /api/events          # Server-Sent Events
 | `/papers` | Papers | 文献 |
 | `/providers` | Providers & quotas | 提供商与配额 |
 | `/failures` | Failure center | 失败任务 |
+| `/storage` | Storage location | 存储目录 |
 
 文献页面还提供：
 
@@ -577,6 +581,25 @@ lit-harvest security scan
 `data/`、`.env` 等受保护路径被 Git 跟踪，会直接失败。CI 中强制执行。
 
 详见 [SECURITY.md](SECURITY.md)。如果发生真实密钥泄漏，请先撤销密钥，不要开公开 Issue。
+
+## 存储目录
+
+默认数据保存在 `./data`，也可以指向任意位置，包括移动硬盘。
+
+**网页端：** 打开「**存储 / Storage**」页面，输入文件夹后点击「**使用此目录并复制数据**」。
+已有文献和数据库会被复制过去，原目录保留作为备份。
+
+**命令行：**
+
+```bash
+lit-harvest storage show                      # 当前存储位置
+lit-harvest storage set ~/lit-harvest-data    # 更改目录并复制现有数据
+lit-harvest storage set /mnt/big --no-migrate # 只切换，不复制
+lit-harvest storage reset                     # 恢复默认 ./data
+```
+
+该设置保存在 `.lit-harvest/settings.json`（Git 忽略，权限 `0600`），对命令行和网页端同时生效。
+修改后需要重启工具。
 
 ## 路径与可移植性
 

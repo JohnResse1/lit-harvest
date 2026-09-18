@@ -16,6 +16,7 @@ from lit_harvest.api.routes.jobs import router as jobs_router
 from lit_harvest.api.routes.papers import router as papers_router
 from lit_harvest.api.routes.providers import router as providers_router
 from lit_harvest.api.routes.search import router as search_router
+from lit_harvest.api.routes.settings import router as settings_router
 from lit_harvest.api.routes.system import router as system_router
 from lit_harvest.config import AppConfig, load_config
 from lit_harvest.services.container import ServiceContainer
@@ -47,6 +48,7 @@ def create_app(config: AppConfig | None = None, *, start_worker: bool = True) ->
     application.include_router(papers_router, prefix="/api")
     application.include_router(providers_router, prefix="/api")
     application.include_router(search_router, prefix="/api")
+    application.include_router(settings_router, prefix="/api")
     application.include_router(jobs_router, prefix="/api")
     application.include_router(events_router, prefix="/api")
 

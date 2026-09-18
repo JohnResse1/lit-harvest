@@ -347,6 +347,9 @@ http://127.0.0.1:8765/docs
 ```text
 lit-harvest version
 lit-harvest demo [--reset] [--clear]
+lit-harvest storage show
+lit-harvest storage set PATH [--migrate/--no-migrate] [--overwrite]
+lit-harvest storage reset [--migrate/--no-migrate]
 lit-harvest doctor  [--network] [--json] [--config PATH]
 
 lit-harvest auth set    [provider] [name] [--secret-ref REF] [--config PATH]
@@ -553,6 +556,7 @@ GET  /api/events          # Server-Sent Events
 | `/papers/:id` | Paper detail | 文献详情 |
 | `/providers` | Providers & quotas | 提供商与配额 |
 | `/failures` | Failure center | 失败任务 |
+| `/storage` | Storage location | 存储目录 |
 
 The Papers page also exposes:
 
@@ -586,6 +590,25 @@ path (`.lit-harvest/`, `config.yaml`, `data/`, `.env`) is tracked by Git. Enforc
 
 See [SECURITY.md](SECURITY.md). Never open a public issue for an active credential leak — revoke the
 key first.
+
+## Storage Location
+
+Data is stored in `./data` by default, and you can point it anywhere — including an external drive.
+
+**Web UI:** open the **Storage / 存储** page, type a folder, and click **Use this folder and copy
+data**. Existing papers and the database are copied; the original is kept as a backup.
+
+**CLI:**
+
+```bash
+lit-harvest storage show                      # where is everything now
+lit-harvest storage set ~/lit-harvest-data    # move storage, copying existing data
+lit-harvest storage set /mnt/big --no-migrate # just switch, do not copy
+lit-harvest storage reset                     # back to ./data
+```
+
+The choice is saved in `.lit-harvest/settings.json` (Git-ignored, permission `0600`), so it applies
+to both the CLI and the dashboard. Restart the tool after changing it.
 
 ## Portability
 

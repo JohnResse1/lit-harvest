@@ -235,7 +235,34 @@ data/
         └── state.json                   # processing record
 ```
 
-### 6. Stop the dashboard
+### 6. Choose where your files are stored (optional)
+
+By default everything is saved in the `data/` folder inside the project. You can point it at any
+folder you like — for example an external drive.
+
+1. Open the **Storage / 存储** page in the sidebar.
+2. Type or paste the folder you want, for example:
+
+   ```text
+   /Users/your-name/lit-harvest-data
+   ```
+3. The page checks the folder immediately and tells you if it is usable.
+4. Click **Use this folder and copy data**.
+
+Your existing papers and the database are **copied** to the new folder, and the original stays where
+it was as a backup. Then restart the tool:
+
+```bash
+# stop with Ctrl+C, then
+.venv/bin/lit-harvest ui
+```
+
+Click **Reset to default** on the same page to go back to `./data`.
+
+> The setting is saved in `.lit-harvest/settings.json` (private, ignored by Git), so it survives
+> restarts without editing any configuration file.
+
+### 7. Stop the dashboard
 
 Go to the terminal where you started it and press **Ctrl + C**.
 
@@ -296,6 +323,10 @@ Save the results to a spreadsheet at the same time:
 .venv/bin/lit-harvest parse             # re-process downloaded XML
 .venv/bin/lit-harvest parse --force     # re-process everything
 .venv/bin/lit-harvest export papers.csv # export your paper list
+
+.venv/bin/lit-harvest storage show    # where files are stored
+.venv/bin/lit-harvest storage set ~/papers-data   # move storage (copies data)
+.venv/bin/lit-harvest storage reset   # back to ./data
 .venv/bin/lit-harvest pause             # pause the queue
 .venv/bin/lit-harvest resume            # resume the queue
 .venv/bin/lit-harvest retry --transient # retry temporary failures
@@ -332,6 +363,10 @@ lit-harvest fetch file.csv           download many articles
 lit-harvest search --query "..." --max-results 20
 lit-harvest parse                    re-process downloaded files
 lit-harvest export papers.csv        export your list
+
+lit-harvest storage show             where files are stored
+lit-harvest storage set PATH         change storage folder (copies data)
+lit-harvest storage reset            back to ./data
 
 lit-harvest jobs                     see job status
 lit-harvest quota                    see remaining quota
@@ -591,7 +626,32 @@ data/
         └── state.json                   # 处理记录
 ```
 
-### 6. 停止面板
+### 6. 选择文件保存位置（可选）
+
+默认所有数据都保存在项目内的 `data/` 目录。你可以改成任意文件夹，例如移动硬盘。
+
+1. 在左侧边栏打开「**存储 / Storage**」页面。
+2. 输入或粘贴目标文件夹，例如：
+
+   ```text
+   /Users/你的用户名/lit-harvest-data
+   ```
+3. 页面会立即检查该目录并告知是否可用。
+4. 点击「**使用此目录并复制数据**」。
+
+已有的文献和数据库会被**复制**到新目录，原目录保留作为备份。然后重启工具：
+
+```bash
+# 先按 Ctrl+C 停止，然后
+.venv/bin/lit-harvest ui
+```
+
+想改回 `./data`，在同一页面点击「**恢复默认**」即可。
+
+> 设置保存在 `.lit-harvest/settings.json`（私有文件，已被 Git 忽略），重启后依然生效，无需手改
+> 配置文件。
+
+### 7. 停止面板
 
 回到启动它的终端，按 **Ctrl + C**。
 
@@ -688,6 +748,10 @@ lit-harvest fetch file.csv           批量下载
 lit-harvest search --query "..." --max-results 20
 lit-harvest parse                    重新处理已下载文件
 lit-harvest export papers.csv        导出清单
+
+lit-harvest storage show             查看当前存储位置
+lit-harvest storage set PATH         更改存储目录（会复制数据）
+lit-harvest storage reset            恢复默认 ./data
 
 lit-harvest jobs                     查看任务状态
 lit-harvest quota                    查看剩余配额

@@ -195,3 +195,8 @@ input[type="file"] {
   -webkit-text-fill-color: #172238;
   background-color: #fff;
 }
+
+.storage-grid strong { font-size: .78rem; overflow-wrap: anywhere; }
+.small-mono { font-size: .78rem; }
+.hint { color: #77869e; font-size: .85rem; margin: 8px 0 12px; }
+.card .actions { margin-top: 12px; }
