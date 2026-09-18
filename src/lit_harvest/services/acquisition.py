@@ -168,6 +168,13 @@ class AcquisitionService:
         elif isinstance(author_field, list):
             authors = "; ".join(str(item) for item in author_field) or None
 
+        # Scopus Search STANDARD exposes only dc:creator (the first author),
+        # so fall back to it when no full author list is available.
+        if not authors:
+            creator = extra.get("creator")
+            if isinstance(creator, str) and creator.strip():
+                authors = creator.strip()
+
         affiliation = extra.get("affiliation_text")
         if not affiliation:
             raw_affiliation = extra.get("affiliation")

@@ -109,6 +109,7 @@ def _first_text(value: Any) -> str | None:
 
 
 def _all_authors(value: Any) -> str | None:
+    """Scopus STANDARD exposes only dc:creator (the first author)."""
     if isinstance(value, dict):
         names = value.get("author")
         if isinstance(names, list):
@@ -118,7 +119,8 @@ def _all_authors(value: Any) -> str | None:
                     name = item.get("authname") or item.get("$")
                     if isinstance(name, str) and name.strip():
                         collected.append(name.strip())
-            return "; ".join(collected) or None
+            if collected:
+                return "; ".join(collected)
     return _first_text(value)
 
 

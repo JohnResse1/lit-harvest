@@ -250,3 +250,19 @@ def test_selection_failure_message_has_no_raw_provider_xml(tmp_path: Path) -> No
     assert "<service-error>" not in message
     assert "RESOURCE_NOT_FOUND" not in message
     assert "could not find this DOI" in message
+
+
+def test_candidate_uses_creator_when_no_author_list() -> None:
+    """Scopus STANDARD only returns dc:creator, mapped into extra["creator"]."""
+    from lit_harvest.models import PaperCreate
+    from lit_harvest.services.acquisition import AcquisitionService
+
+    paper = PaperCreate(
+        doi="10.1000/creator-test",
+        title="T",
+        journal="J",
+        publication_year=2026,
+        extra={"creator": "Liu W."},
+    )
+    candidate = AcquisitionService._candidate_from_paper(paper, paper_id=None)
+    assert candidate.authors == "Liu W."

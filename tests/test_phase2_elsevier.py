@@ -89,23 +89,33 @@ def test_search_standard_parser() -> None:
 def test_search_pagination_and_raw_response(
     database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Pagination walks `start` in 25-item pages and still preserves raw JSON."""
     monkeypatch.setenv("ELSEVIER_KEY_PRIMARY", "secret")
     creds = CredentialManager(config(), database)
     creds.sync_configured_credentials()
     quotas = QuotaManager(database)
-    pages = [
-        httpx.Response(
+    seen_starts: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        start_index = int(params.get("start", "0"))
+        seen_starts.append(start_index)
+        if start_index == 0:
+            entries = [
+                {"prism:doi": f"10.1000/a{index}", "dc:title": f"A{index}"} for index in range(25)
+            ]
+        else:
+            entries = [
+                {"prism:doi": f"10.1000/b{index}", "dc:title": f"B{index}"} for index in range(5)
+            ]
+        return httpx.Response(
             200,
             json={
                 "search-results": {
-                    "opensearch:totalResults": "3",
-                    "opensearch:startIndex": "0",
-                    "opensearch:itemsPerPage": "2",
-                    "cursor": {"@current": "*", "@next": "cursor-2"},
-                    "entry": [
-                        {"prism:doi": "10.1000/a", "dc:title": "A"},
-                        {"prism:doi": "10.1000/b", "dc:title": "B"},
-                    ],
+                    "opensearch:totalResults": "30",
+                    "opensearch:startIndex": str(start_index),
+                    "opensearch:itemsPerPage": "25",
+                    "entry": entries,
                 }
             },
             headers={
@@ -113,31 +123,25 @@ def test_search_pagination_and_raw_response(
                 "X-RateLimit-Limit": "100",
                 "X-RateLimit-Remaining": "80",
             },
-        ),
-        httpx.Response(
-            200,
-            json={
-                "search-results": {
-                    "opensearch:totalResults": "3",
-                    "cursor": {"@current": "cursor-2", "@next": "cursor-3"},
-                    "entry": [{"prism:doi": "10.1000/c", "dc:title": "C"}],
-                }
-            },
-        ),
-    ]
-    client = ElsevierClient(transport=httpx.MockTransport(lambda request: pages.pop(0)))
+        )
+
+    client = ElsevierClient(transport=httpx.MockTransport(handler))
     provider = ElsevierProvider(database=database, credentials=creds, quotas=quotas, client=client)
-    result = provider.search("TITLE-ABS-KEY(test)", max_results=3)
-    assert [paper.doi for page in result for paper in page.papers] == [
-        "10.1000/a",
-        "10.1000/b",
-        "10.1000/c",
-    ]
+    result = provider.search("TITLE-ABS-KEY(test)", max_results=30)
+
+    assert seen_starts == [0, 25], f"unexpected pagination: {seen_starts}"
+    dois = [paper.doi for page in result for paper in page.papers]
+    assert len(dois) == 30
+    assert dois[0] == "10.1000/a0"
+    assert dois[-1] == "10.1000/b4"
     assert result[0].raw.startswith(b'{"search-results"')
+    assert result[0].total_results == 30
+
     quota = database.get_quota("elsevier", "scopus_search", result[0].credential.id)
     assert quota is not None
     assert quota.limit == 100
-    assert quota.remaining == 78
+    # The header reports 80 remaining; the local estimate consumes one more unit.
+    assert quota.remaining == 79
 
 
 def test_fulltext_retrieval_and_quota_headers(
@@ -394,3 +398,83 @@ def test_first_search_page_omits_cursor_parameter(
     assert seen_params, "no request was made"
     assert "cursor" not in seen_params[0], "first page must omit the restricted cursor parameter"
     assert "cursor" not in seen_params[0], "cursor=* is equivalent and also restricted"
+
+
+def test_search_never_requests_more_than_25_per_page(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scopus returns HTTP 400 for count > 25, so pages must stay small."""
+    monkeypatch.setenv("ELSEVIER_KEY_PRIMARY", "secret")
+    creds = CredentialManager(config(), database)
+    creds.sync_configured_credentials()
+    requested_counts: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requested_counts.append(int(params.get("count", "0")))
+        start = int(params.get("start", "0"))
+        # Return a full page so pagination continues.
+        entries = [
+            {"prism:doi": f"10.1000/page-{start}-{index}", "dc:title": "T"} for index in range(25)
+        ]
+        return httpx.Response(
+            200,
+            json={
+                "search-results": {
+                    "opensearch:totalResults": "1000",
+                    "opensearch:itemsPerPage": "25",
+                    "entry": entries,
+                }
+            },
+            headers={"Content-Type": "application/json"},
+        )
+
+    provider = ElsevierProvider(
+        database=database,
+        credentials=creds,
+        quotas=QuotaManager(database),
+        client=ElsevierClient(transport=httpx.MockTransport(handler)),
+    )
+    pages = provider.search("TITLE-ABS-KEY(x)", max_results=100)
+
+    assert requested_counts, "no requests were made"
+    assert max(requested_counts) <= 25, f"count exceeded the Scopus cap: {requested_counts}"
+    assert sum(len(page.papers) for page in pages) == 100
+
+
+def test_search_uses_start_pagination_not_cursor(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The restricted cursor parameter must not be used for paging."""
+    monkeypatch.setenv("ELSEVIER_KEY_PRIMARY", "secret")
+    creds = CredentialManager(config(), database)
+    creds.sync_configured_credentials()
+    seen: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        seen.append(params)
+        start = int(params.get("start", "0"))
+        entries = [{"prism:doi": f"10.1000/p{start}-{i}", "dc:title": "T"} for i in range(25)]
+        return httpx.Response(
+            200,
+            json={
+                "search-results": {
+                    "opensearch:totalResults": "500",
+                    "entry": entries,
+                }
+            },
+            headers={"Content-Type": "application/json"},
+        )
+
+    provider = ElsevierProvider(
+        database=database,
+        credentials=creds,
+        quotas=QuotaManager(database),
+        client=ElsevierClient(transport=httpx.MockTransport(handler)),
+    )
+    provider.search("TITLE-ABS-KEY(x)", max_results=50)
+
+    assert all("cursor" not in params for params in seen)
+    starts = [int(params.get("start", "0")) for params in seen]
+    assert starts == [0, 25]

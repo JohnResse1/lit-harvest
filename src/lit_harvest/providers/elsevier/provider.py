@@ -105,6 +105,9 @@ class ElsevierProvider:
                 )
         return results
 
+    # Scopus rejects count > 25 with HTTP 400, regardless of entitlements.
+    MAX_PAGE_SIZE = 25
+
     def search(
         self,
         query: str,
@@ -116,25 +119,22 @@ class ElsevierProvider:
         if max_results < 1:
             raise ValueError("max_results must be >= 1")
         pages: list[SearchPage] = []
-        cursor: str | None = None
         retrieved = 0
         total: int | None = None
         exhausted_credentials: set[str] = set()
         last_error: ProviderError | None = None
+
         while retrieved < max_results:
-            count = min(200, max_results - retrieved)
+            count = min(self.MAX_PAGE_SIZE, max_results - retrieved)
             params: dict[str, Any] = {
                 "query": query,
                 "view": "STANDARD",
                 "count": count,
+                "start": retrieved,
             }
-            # The cursor parameter requires extra Elsevier entitlements, and
-            # `cursor=*` is identical to omitting it (it means "first page").
-            # Only send a real cursor when we actually have one.
-            if cursor:
-                params["cursor"] = cursor
             if start_year is not None:
                 params["date"] = f"{start_year}-{end_year or datetime.now(UTC).year}"
+
             credential: Credential | None = None
             try:
                 credential = self.credentials.select(
@@ -161,6 +161,7 @@ class ElsevierProvider:
                 self._handle_provider_error("scopus_search", credential, exc)
                 exhausted_credentials.add(credential.id)
                 continue
+
             if credential:
                 self.quotas.apply_headers(
                     provider=self.name,
@@ -175,28 +176,27 @@ class ElsevierProvider:
                     credential_id=credential.id,
                     quota_scope=credential.quota_scope,
                 )
+
             payload = self._json(response)
             papers, info = parse_search_response(payload)
             total = info.get("total_results", total)
-            next_cursor = info.get("next_cursor")
             pages.append(
                 SearchPage(
                     papers=papers,
                     total_results=total,
-                    start_index=info.get("start_index", retrieved + 1),
+                    start_index=info.get("start_index", retrieved),
                     items_per_page=info.get("items_per_page", len(papers)),
-                    current_cursor=info.get("current_cursor", cursor),
-                    next_cursor=next_cursor,
+                    current_cursor=None,
+                    next_cursor=None,
                     raw=response.content,
                     credential=credential,
                 )
             )
             retrieved += len(papers)
-            if not papers or not next_cursor or next_cursor == cursor:
+            if not papers or len(papers) < count:
                 break
-            # Cursor pagination needs entitlements; if they are missing the
-            # provider returns 403 and we stop cleanly after the first page.
-            cursor = next_cursor
+            if total is not None and retrieved >= total:
+                break
         return pages
 
     def fetch_fulltext(self, doi: str) -> FullTextResult:
