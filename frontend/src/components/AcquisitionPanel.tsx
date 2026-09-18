@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { api } from "../lib/api";
+import { useRef, useState } from "react";
+import { api, type ImportOutcome } from "../lib/api";
 import { useLanguage } from "../lib/LanguageContext";
 
 export function AcquisitionPanel({ onChanged }: { onChanged: () => void }) {
@@ -11,6 +11,10 @@ export function AcquisitionPanel({ onChanged }: { onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [doiColumn, setDoiColumn] = useState("doi");
+  const [runNow, setRunNow] = useState(true);
+  const [importResult, setImportResult] = useState<ImportOutcome | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const run = async (operation: () => Promise<unknown>, successKey: string) => {
     setBusy(true);
@@ -54,6 +58,79 @@ export function AcquisitionPanel({ onChanged }: { onChanged: () => void }) {
           >
             {t("fetchNow")}
           </button>
+        </div>
+
+        <div className="acquisition-block">
+          <h3>{t("batchImportTitle")}</h3>
+          <input
+            ref={fileInput}
+            className="file-input"
+            type="file"
+            accept=".csv,.tsv,.txt,.json,.jsonl"
+            onChange={() => setImportResult(null)}
+          />
+          <label className="field-row">
+            <span>{t("doiColumn")}</span>
+            <input
+              className="text-input"
+              value={doiColumn}
+              onChange={(event) => setDoiColumn(event.target.value)}
+            />
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" checked={runNow} onChange={(event) => setRunNow(event.target.checked)} />
+            {t("runImmediately")}
+          </label>
+          <button
+            className="button primary"
+            disabled={busy}
+            onClick={() => {
+              const file = fileInput.current?.files?.[0];
+              if (!file) {
+                setError(t("chooseFileFirst"));
+                return;
+              }
+              void run(async () => {
+                const outcome = await api.importFile(file, doiColumn, runNow, downloadPdf);
+                setImportResult(outcome);
+              }, t("importDone"));
+            }}
+          >
+            {t("uploadAndImport")}
+          </button>
+          <a className="sample-link" href="/examples/dois.sample.csv" download>
+            {t("downloadSampleCsv")}
+          </a>
+          {importResult ? (
+            <div className="import-summary">
+              <p>
+                <strong>{t("queuedCount")}:</strong> {importResult.queued} ·{" "}
+                <strong>{t("duplicateCount")}:</strong> {importResult.duplicates} ·{" "}
+                <strong>{t("invalidCount")}:</strong> {importResult.invalid.length}
+              </p>
+              {importResult.run ? (
+                <p>
+                  <strong>{t("executed")}:</strong> {importResult.run.succeeded} /{" "}
+                  {importResult.run.attempted}
+                </p>
+              ) : null}
+              {importResult.pdf_succeeded !== undefined ? (
+                <p>
+                  <strong>{t("pdfDownloaded")}:</strong> {importResult.pdf_succeeded} ·{" "}
+                  <strong>{t("pdfFailed")}:</strong> {importResult.pdf_failed}
+                </p>
+              ) : null}
+              {importResult.invalid.length > 0 ? (
+                <ul className="invalid-list">
+                  {importResult.invalid.slice(0, 5).map((item) => (
+                    <li key={`${item.row}-${item.raw}`}>
+                      {t("row")} {item.row ?? "?"}: <code>{item.raw}</code> — {item.reason}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="acquisition-block">

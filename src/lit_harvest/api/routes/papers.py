@@ -56,9 +56,13 @@ async def import_dois(
     run_now: Annotated[bool, Query()] = False,
     download_pdf: Annotated[bool, Query()] = False,
 ) -> dict[str, Any]:
+    """Queue (and optionally execute) a batch of DOIs from an uploaded file."""
     suffix = Path(file.filename or "upload.csv").suffix.lower()
     if suffix not in {".csv", ".tsv", ".txt", ".json", ".jsonl"}:
-        raise HTTPException(status_code=415, detail="Unsupported DOI file type")
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported file type. Use .csv, .tsv, .txt, .json, or .jsonl",
+        )
     content = await file.read()
     incoming = container.storage.root / "incoming"
     incoming.mkdir(parents=True, exist_ok=True)
@@ -66,37 +70,49 @@ async def import_dois(
     temporary.write_bytes(content)
     try:
         result = container.acquisition.import_dois(temporary, doi_column=doi_column)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     finally:
         temporary.unlink(missing_ok=True)
+
     payload: dict[str, Any] = {
         "queued": result.queued,
         "duplicates": result.duplicates,
         "invalid": result.invalid,
+        "paper_ids": result.paper_ids,
     }
-    if run_now:
-        run = container.scheduler.run(max_jobs=max(result.queued, 1))
+
+    if run_now and result.paper_ids:
+        run = container.scheduler.run(max_jobs=len(result.paper_ids))
         payload["run"] = {
             "attempted": run.attempted,
             "succeeded": run.succeeded,
             "failed": run.failed,
+            "waiting_for_quota": run.waiting_for_quota,
         }
-        if download_pdf:
-            pdfs: list[dict[str, Any]] = []
-            for paper in container.papers.list(limit=max(result.queued, 1)):
-                if not paper.doi:
-                    continue
-                try:
-                    pdfs.append(container.acquisition.fetch_pdf(paper.id))
-                except Exception as exc:  # noqa: BLE001 - partial failures are reported
-                    pdfs.append(
-                        {
-                            "paper_id": paper.id,
-                            "doi": paper.doi,
-                            "error": getattr(exc, "code", "pdf_failed"),
-                            "message": str(exc),
-                        }
-                    )
-            payload["pdfs"] = pdfs
+
+    if download_pdf and result.paper_ids:
+        # Target exactly the papers from this upload, not the N most recent.
+        pdfs: list[dict[str, Any]] = []
+        for paper_id in result.paper_ids:
+            paper = container.papers.get(paper_id)
+            if paper is None or not paper.doi:
+                continue
+            try:
+                pdfs.append(container.acquisition.fetch_pdf(paper.id))
+            except Exception as exc:  # noqa: BLE001 - partial failures are reported
+                pdfs.append(
+                    {
+                        "paper_id": paper.id,
+                        "doi": paper.doi,
+                        "error": getattr(exc, "code", "pdf_failed"),
+                        "message": str(exc),
+                    }
+                )
+        payload["pdfs"] = pdfs
+        payload["pdf_succeeded"] = sum(1 for item in pdfs if "pdf_path" in item)
+        payload["pdf_failed"] = sum(1 for item in pdfs if "error" in item)
+
     return payload
 
 

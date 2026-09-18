@@ -43,6 +43,8 @@ class ImportResult:
     queued: int
     duplicates: int
     invalid: list[dict[str, Any]]
+    paper_ids: list[str]
+    queued_paper_ids: list[str]
 
 
 @dataclass(slots=True)
@@ -122,6 +124,8 @@ class AcquisitionService:
         loaded = load_dois(path, doi_column=doi_column)
         queued = 0
         duplicates = 0
+        paper_ids: list[str] = []
+        queued_paper_ids: list[str] = []
         for item in loaded.valid:
             existing = self.database.get_paper_by_doi(item.doi)
             if existing:
@@ -131,6 +135,7 @@ class AcquisitionService:
                 paper = self.database.create_paper(
                     PaperCreate(doi=item.doi, discovery_source="doi_import")
                 )
+            paper_ids.append(paper.id)
             job = JobCreate(
                 task_type=TaskType.FETCH_FULLTEXT,
                 paper_id=paper.id,
@@ -143,6 +148,7 @@ class AcquisitionService:
             self.database.create_job(job)
             if self.database.count_jobs() > before:
                 queued += 1
+                queued_paper_ids.append(paper.id)
         return ImportResult(
             queued=queued,
             duplicates=duplicates,
@@ -150,6 +156,8 @@ class AcquisitionService:
                 {"raw": item.raw, "row": item.source_row, "reason": item.reason}
                 for item in loaded.invalid
             ],
+            paper_ids=paper_ids,
+            queued_paper_ids=queued_paper_ids,
         )
 
     def queue_doi(self, doi: str) -> tuple[str, bool]:

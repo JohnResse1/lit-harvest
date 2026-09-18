@@ -38,7 +38,7 @@ lit-harvest = "lit_harvest.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lit_harvest"]
-include = ["src/lit_harvest/**/*.py", "src/lit_harvest/api/static/**", "src/lit_harvest/py.typed"]
+include = ["src/lit_harvest/**/*.py", "src/lit_harvest/api/static/**", "src/lit_harvest/api/examples/**", "src/lit_harvest/py.typed"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

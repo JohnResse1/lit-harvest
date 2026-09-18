@@ -222,10 +222,48 @@ providers:
     download_pdf: true
 ```
 
-### 导入 DOI 文件
+### 导入 DOI 文件（命令行）
 
 ```bash
 .venv/bin/lit-harvest fetch papers.csv --doi-column doi
+```
+
+### 导入 DOI 文件（网页版）
+
+打开 `http://127.0.0.1:8765/papers`，使用「**从文件批量导入**」面板：
+
+1. 选择 `.csv`、`.tsv`、`.txt`、`.json` 或 `.jsonl` 文件
+2. 设置「**DOI 列名**」（默认 `doi`）
+3. 保持勾选「**立即执行**」即可排队并真正下载
+4. 勾选「**同时下载出版商 PDF**」可一并保存 PDF
+
+面板内可直接下载示例文件：
+[`examples/dois.sample.csv`](examples/dois.sample.csv)
+
+```csv
+doi,title,notes
+10.1016/j.mtcomm.2026.115551,Information extraction for materials science,示例
+https://doi.org/10.1016/j.jpowsour.2026.100001,Solid-state battery interfaces,URL 形式
+doi:10.1016/j.nanoen.2026.100002,Nanostructured electrolytes,带 doi 前缀
+```
+
+### 导入 DOI 文件（本地接口）
+
+```bash
+curl -X POST 'http://127.0.0.1:8765/api/papers/import?doi_column=doi&run_now=true&download_pdf=false' \
+  -F 'file=@examples/dois.sample.csv;type=text/csv'
+```
+
+返回结果会明确报告执行情况：
+
+```json
+{
+  "queued": 4,
+  "duplicates": 0,
+  "invalid": [],
+  "paper_ids": ["...", "..."],
+  "run": {"attempted": 4, "succeeded": 4, "failed": 0, "waiting_for_quota": 0}
+}
 ```
 
 ```text

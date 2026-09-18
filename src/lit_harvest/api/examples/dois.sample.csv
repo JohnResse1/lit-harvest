@@ -1,0 +1,5 @@
+doi,title,notes
+10.1016/j.mtcomm.2026.115551,Information extraction for materials science,Example from the project acceptance test
+https://doi.org/10.1016/j.jpowsour.2026.100001,Solid-state battery interfaces,Accepts full https://doi.org/ URLs
+doi:10.1016/j.nanoen.2026.100002,Nanostructured electrolytes,Accepts the doi: prefix
+10.1007/s40820-026-02270-0,Low-temperature all-solid-state batteries,Any DOI works with an entitled credential

@@ -21,6 +21,8 @@ from lit_harvest.config import AppConfig, load_config
 from lit_harvest.services.container import ServiceContainer
 
 STATIC_DIR = Path(__file__).parent / "static"
+# Ship the sample DOI files alongside the package so the dashboard can serve them.
+EXAMPLES_DIR = Path(__file__).parent / "examples"
 
 
 def create_app(config: AppConfig | None = None, *, start_worker: bool = True) -> FastAPI:
@@ -47,6 +49,9 @@ def create_app(config: AppConfig | None = None, *, start_worker: bool = True) ->
     application.include_router(search_router, prefix="/api")
     application.include_router(jobs_router, prefix="/api")
     application.include_router(events_router, prefix="/api")
+
+    if EXAMPLES_DIR.exists():
+        application.mount("/examples", StaticFiles(directory=EXAMPLES_DIR), name="examples")
 
     if STATIC_DIR.exists():
         assets = STATIC_DIR / "assets"

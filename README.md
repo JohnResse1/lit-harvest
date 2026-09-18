@@ -225,10 +225,50 @@ providers:
     download_pdf: true
 ```
 
-### Import a DOI file
+### Import a DOI file (CLI)
 
 ```bash
 .venv/bin/lit-harvest fetch papers.csv --doi-column doi
+```
+
+### Import a DOI file (Web UI)
+
+Open `http://127.0.0.1:8765/papers` and use the **Batch import from file** panel:
+
+1. Choose a `.csv`, `.tsv`, `.txt`, `.json`, or `.jsonl` file.
+2. Set the **DOI column** (default `doi`).
+3. Keep **Run immediately** checked to queue *and* fetch.
+4. Tick **Also download the publisher PDF** to attach PDFs too.
+
+A ready-to-use sample is downloadable from the same panel:
+[`examples/dois.sample.csv`](examples/dois.sample.csv)
+
+```csv
+doi,title,notes
+10.1016/j.mtcomm.2026.115551,Information extraction for materials science,Example
+https://doi.org/10.1016/j.jpowsour.2026.100001,Solid-state battery interfaces,URL form
+doi:10.1016/j.nanoen.2026.100002,Nanostructured electrolytes,doi prefix
+```
+
+### Import a DOI file (local API)
+
+```bash
+curl -X POST 'http://127.0.0.1:8765/api/papers/import?doi_column=doi&run_now=true&download_pdf=false' \
+  -F 'file=@examples/dois.sample.csv;type=text/csv'
+```
+
+The response reports exactly what happened:
+
+```json
+{
+  "queued": 4,
+  "duplicates": 0,
+  "invalid": [],
+  "paper_ids": ["...", "..."],
+  "run": {"attempted": 4, "succeeded": 4, "failed": 0, "waiting_for_quota": 0},
+  "pdf_succeeded": 0,
+  "pdf_failed": 0
+}
 ```
 
 ```text

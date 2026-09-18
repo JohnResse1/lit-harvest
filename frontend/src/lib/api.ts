@@ -20,6 +20,16 @@ export interface WorkerStatus {
   last_result: Record<string, unknown> | null;
 }
 
+export interface ImportOutcome {
+  queued: number;
+  duplicates: number;
+  invalid: Array<{ raw: string; row: number | null; reason: string }>;
+  paper_ids: string[];
+  run?: { attempted: number; succeeded: number; failed: number; waiting_for_quota: number };
+  pdf_succeeded?: number;
+  pdf_failed?: number;
+}
+
 export interface SearchOutcome {
   query: string;
   discovered: number;
@@ -64,10 +74,15 @@ export const api = {
   failures: () => request<Failure[]>("/api/failures"),
   providers: () => request<Provider[]>("/api/providers"),
   quotas: () => request<Quota[]>("/api/providers/quotas"),
-  importFile: (file: File, doiColumn: string, runNow = false, downloadPdf = false) => {
+  importFile: (
+    file: File,
+    doiColumn = "doi",
+    runNow = false,
+    downloadPdf = false,
+  ) => {
     const form = new FormData();
     form.append("file", file);
-    return request<{ queued: number; duplicates: number; invalid: unknown[] }>(
+    return request<ImportOutcome>(
       `/api/papers/import?doi_column=${encodeURIComponent(doiColumn)}` +
         `&run_now=${runNow}&download_pdf=${downloadPdf}`,
       { method: "POST", body: form },
