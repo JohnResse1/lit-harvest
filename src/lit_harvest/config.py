@@ -75,10 +75,12 @@ class ElsevierConfig(BaseModel):
     enabled: bool = True
     base_url: str = "https://api.elsevier.com"
     timeout_seconds: float = 30.0
+    download_pdf: bool = False
     services: dict[str, ServiceConfig] = Field(
         default_factory=lambda: {
             "scopus_search": ServiceConfig(),
             "article_retrieval": ServiceConfig(),
+            "article_pdf": ServiceConfig(),
         }
     )
     credentials: list[CredentialConfig] = Field(default_factory=list)

@@ -17,10 +17,15 @@ server:
 providers:
   elsevier:
     enabled: true
+    # Optional: also save the publisher PDF alongside the canonical FULL XML.
+    download_pdf: false
     services:
       scopus_search:
         enabled: true
       article_retrieval:
+        enabled: true
+      # Used only when PDF download is enabled.
+      article_pdf:
         enabled: true
     credentials:
       - name: university_primary

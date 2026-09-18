@@ -23,6 +23,7 @@ Literature Harvester 面向个人研究者，支持：
 
 - Scopus Search STANDARD 检索和游标分页
 - ScienceDirect FULL XML 全文获取
+- 可选下载出版商 PDF，并作为独立原始附件保存
 - 提供商抽象、凭证元数据、健康检查和配额监控
 - 支持配额感知、重试和恢复的 SQLite 任务队列
 - 支持 CSV、TSV、TXT、JSON、JSONL 的 DOI 导入
@@ -32,6 +33,8 @@ Literature Harvester 面向个人研究者，支持：
 - 显示 提供商 → 服务 → 凭证 的配额状态
 - 失败中心，支持暂停、恢复、重试和取消
 - 项目内凭证存储，不需要导出 API Key 环境变量
+
+v0.1 不对 PDF 做 OCR；PDF 仅作为原始附件保存，并按访问权限使用。
 
 v0.1 明确不包含：LLM 抽取、材料领域 NER、关系抽取、知识图谱、Neo4j、向量数据库、研究空白
 发现、假设生成、PDF OCR、浏览器抓取、云部署、用户登录和 UI 内凭证编辑。
@@ -137,6 +140,23 @@ providers:
 .venv/bin/lit-harvest fetch 10.1016/j.mtcomm.2026.115551
 ```
 
+### 同时下载出版商 PDF
+
+```bash
+.venv/bin/lit-harvest fetch 10.1016/j.mtcomm.2026.115551 --pdf
+```
+
+PDF 是补充性原始附件，FULL XML 仍然是规范化内容的权威来源。如果没有 PDF 权限或下载失败，
+XML 获取仍会成功，并在 JSON 结果中返回 `pdf_error` 字段。
+
+如果希望每次 fetch 都尝试下载 PDF：
+
+```yaml
+providers:
+  elsevier:
+    download_pdf: true
+```
+
 ### 导入 DOI 文件
 
 ```bash
@@ -204,7 +224,7 @@ lit-harvest doctor [--network] [--json] [--config PATH]
 lit-harvest search --query QUERY --max-results N [--start-year N] [--end-year N]
                    [--export PATH] [--config PATH]
 
-lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--config PATH]
+lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--pdf|--no-pdf] [--config PATH]
 lit-harvest parse [--limit N] [--config PATH]
 lit-harvest export PATH [--format csv|json|jsonl] [--config PATH]
 lit-harvest jobs [--status STATUS] [--limit N] [--config PATH]
@@ -326,7 +346,8 @@ data/
 └── papers/
     └── 10.1016_j.example/
         ├── raw/
-        │   └── elsevier_xml.xml
+        │   ├── elsevier_xml.xml
+        │   └── elsevier_pdf.pdf        # 可选
         ├── normalized/
         │   └── paper.json
         └── state.json
@@ -431,6 +452,7 @@ git status --short
 - DOI 导入
 - Scopus Search STANDARD
 - ScienceDirect FULL XML 获取
+- 可选保存出版商 PDF 附件
 - Elsevier FULL XML 确定性规范化
 - CLI
 - FastAPI 后端

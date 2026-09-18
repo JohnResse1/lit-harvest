@@ -293,6 +293,10 @@ def fetch(
     doi_column: Annotated[
         str, typer.Option("--doi-column", help="DOI column for CSV/TSV/JSON input.")
     ] = "doi",
+    pdf: Annotated[
+        bool | None,
+        typer.Option("--pdf/--no-pdf", help="Also download the publisher PDF when entitled."),
+    ] = None,
     config: Annotated[str | None, typer.Option("--config")] = None,
 ) -> None:
     """Queue and retrieve full text for one DOI or a DOI list."""
@@ -311,15 +315,19 @@ def fetch(
         _print_json(run)
         return
     fetched = container.acquisition.fetch_now(source)
-    _print_json(
-        {
-            "paper_id": fetched.paper_id,
-            "doi": fetched.doi,
-            "raw_path": fetched.raw_path,
-            "normalized_path": fetched.normalized_path,
-            "reused": fetched.reused,
-        }
-    )
+    payload: dict[str, Any] = {
+        "paper_id": fetched.paper_id,
+        "doi": fetched.doi,
+        "raw_path": fetched.raw_path,
+        "normalized_path": fetched.normalized_path,
+        "reused": fetched.reused,
+    }
+    if container.acquisition.pdf_enabled(pdf):
+        try:
+            payload["pdf"] = container.acquisition.fetch_pdf(fetched.paper_id)
+        except Exception as exc:  # noqa: BLE001 - XML success must remain usable
+            payload["pdf_error"] = {"code": getattr(exc, "code", "pdf_failed"), "message": str(exc)}
+    _print_json(payload)
 
 
 @app.command()

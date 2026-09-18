@@ -151,19 +151,26 @@ class QuotaManager:
         credential_id: str | None,
         quota_scope: QuotaScope,
         units: int = 1,
+        limit: int | None = None,
     ) -> None:
         existing = self.database.get_quota(provider, service, credential_id)
-        if existing is None or existing.remaining is None:
+        observed_limit = existing.limit if existing and existing.limit is not None else limit
+        if existing and existing.remaining is not None:
+            remaining = max(existing.remaining - units, 0)
+            reset_at = existing.reset_at
+        elif observed_limit is not None:
+            remaining = max(observed_limit - units, 0)
+            reset_at = existing.reset_at if existing else None
+        else:
             return
-        remaining = max(existing.remaining - units, 0)
         self.database.upsert_quota(
             QuotaUpdate(
                 provider=provider,
                 service=service,
                 credential_id=credential_id,
-                limit=existing.limit,
+                limit=observed_limit,
                 remaining=remaining,
-                reset_at=existing.reset_at,
+                reset_at=reset_at,
                 source=QuotaSource.LOCAL_ESTIMATE,
                 quota_scope=quota_scope,
             )

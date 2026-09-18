@@ -203,6 +203,71 @@ class AcquisitionService:
         self.database.update_job_status(job.id, JobStatus.SUCCESS)
         return result
 
+    def fetch_pdf(self, paper_id: str) -> dict[str, Any]:
+        paper = self.database.get_paper(paper_id)
+        if paper is None:
+            raise KeyError(f"Paper not found: {paper_id}")
+        if not paper.doi:
+            raise ValueError("PDF download requires a DOI")
+        provider = self.providers.get("elsevier")
+        if not hasattr(provider, "fetch_pdf"):
+            raise TypeError("Provider does not support PDF retrieval")
+        existing = self.storage.paper_dir(paper.doi) / "raw" / "elsevier_pdf.pdf"
+        if existing.exists():
+            self.database.add_paper_extra(
+                paper.id,
+                {"pdf_path": str(existing), "pdf_reused": True},
+            )
+            return {
+                "paper_id": paper.id,
+                "doi": paper.doi,
+                "pdf_path": str(existing),
+                "reused": True,
+            }
+        result: FullTextResult = provider.fetch_pdf(paper.doi)
+        path = self.storage.write_raw(paper.doi, "elsevier_pdf.pdf", result.content)
+        self.database.record_download(
+            paper_id=paper.id,
+            provider=result.provider,
+            service=result.service,
+            credential_id=result.credential.id if result.credential else None,
+            status=DownloadStatus.SUCCESS.value,
+            format="pdf",
+            raw_path=str(path),
+            checksum=sha256_bytes(result.content),
+            http_status=result.http_status,
+        )
+        self.database.add_paper_extra(
+            paper.id,
+            {
+                "pdf_path": str(path),
+                "pdf_checksum": sha256_bytes(result.content),
+                "pdf_reused": False,
+            },
+        )
+        self.storage.write_state(
+            paper.doi,
+            {**self.storage.read_state(paper.doi), "pdf_path": str(path)},
+        )
+        raw_download = self._existing_success(paper.id)
+        if raw_download and raw_download.get("raw_path"):
+            raw_path = Path(str(raw_download["raw_path"]))
+            if raw_path.exists():
+                self.normalization.normalize(
+                    content=raw_path.read_bytes(),
+                    doi=paper.doi,
+                    paper_id=paper.id,
+                    source_path=str(raw_path),
+                    http_status=raw_download.get("http_status"),
+                    pdf_path=str(path),
+                )
+        return {"paper_id": paper.id, "doi": paper.doi, "pdf_path": str(path), "reused": False}
+
+    def pdf_enabled(self, override: bool | None = None) -> bool:
+        if override is not None:
+            return override
+        return self.config.providers.elsevier.download_pdf
+
     def fetch_job(self, job: Job) -> FetchResult:
         if job.paper_id is None:
             raise ValueError("Fetch job requires paper_id")
@@ -228,11 +293,10 @@ class AcquisitionService:
         if not hasattr(provider, "fetch_fulltext"):
             raise TypeError(f"Provider does not support full-text retrieval: {provider.name}")
         result: FullTextResult = provider.fetch_fulltext(doi)
+        suffix = "xml" if result.format == "xml" else result.format
         raw_path = self.storage.write_raw(
             doi,
-            f"{result.provider}_{result.format}.xml"
-            if result.format == "xml"
-            else f"{result.provider}_{result.format}",
+            f"{result.provider}_{result.format}.{suffix}",
             result.content,
         )
         checksum = sha256_bytes(result.content)
@@ -309,7 +373,20 @@ class AcquisitionService:
             if paper.extra.get("normalized_path") and not force:
                 skipped += 1
                 continue
-            download = self.database.latest_download(paper.id)
+            download = self._existing_success(paper.id)
+            if download is None and not force:
+                skipped += 1
+                continue
+            if download is None:
+                candidates = self.database.list_downloads(paper.id)
+                download = next(
+                    (
+                        item
+                        for item in reversed(candidates)
+                        if item.get("raw_path") and str(item["raw_path"]).lower().endswith(".xml")
+                    ),
+                    None,
+                )
             if not download or not download.get("raw_path"):
                 skipped += 1
                 continue
@@ -322,12 +399,14 @@ class AcquisitionService:
                 continue
             doi = paper.doi or str(download.get("doi") or "")
             try:
+                pdf_path = paper.extra.get("pdf_path")
                 self.normalization.normalize(
                     content=raw_path.read_bytes(),
                     doi=doi,
                     paper_id=paper.id,
                     source_path=str(raw_path),
                     http_status=download.get("http_status"),
+                    pdf_path=str(pdf_path) if pdf_path else None,
                 )
                 processed += 1
             except Exception as exc:  # noqa: BLE001 - batch parser isolates per paper
@@ -336,10 +415,13 @@ class AcquisitionService:
         return {"processed": processed, "failed": failed, "skipped": skipped}
 
     def _existing_success(self, paper_id: str) -> dict[str, Any] | None:
-        download = self.database.latest_download(paper_id)
-        if not download or download.get("status") != DownloadStatus.SUCCESS.value:
-            return None
-        raw_path = download.get("raw_path")
-        if not raw_path or not Path(str(raw_path)).exists():
-            return None
-        return download
+        for download in reversed(self.database.list_downloads(paper_id)):
+            if download.get("status") != DownloadStatus.SUCCESS.value:
+                continue
+            if download.get("format") != "xml":
+                continue
+            raw_path = download.get("raw_path")
+            if not raw_path or not Path(str(raw_path)).exists():
+                continue
+            return download
+        return None

@@ -72,3 +72,27 @@ def test_parser_prefers_article_abstract_over_graphical_abstract() -> None:
     assert document.abstract is not None
     assert document.abstract.startswith("This is the real article abstract")
     assert "Graphical Abstract" not in document.abstract
+
+
+def test_pdf_attachment_is_visible_in_normalized_document(tmp_path: Path) -> None:
+    from lit_harvest.models import PaperStage
+    from lit_harvest.services.normalization import NormalizationService
+    from lit_harvest.storage.database import Database
+    from lit_harvest.storage.files import DocumentStorage
+
+    database = Database(f"sqlite:///{tmp_path / 'state.db'}")
+    database.initialize()
+    storage = DocumentStorage(tmp_path / "data")
+    from lit_harvest.models import PaperCreate
+
+    paper = database.create_paper(PaperCreate(doi="10.1000/pdf-test"))
+    service = NormalizationService(database, storage)
+    pdf_path = storage.write_raw("10.1000/pdf-test", "elsevier_pdf.pdf", b"%PDF-1.7\n")
+    result = service.normalize(
+        content=b"<full-text-retrieval-response><doi>10.1000/pdf-test</doi></full-text-retrieval-response>",
+        doi="10.1000/pdf-test",
+        paper_id=paper.id,
+        pdf_path=str(pdf_path),
+    )
+    assert result["document"]["attachments"][0]["kind"] == "pdf"
+    assert database.get_paper(paper.id).stage == PaperStage.NORMALIZED.value

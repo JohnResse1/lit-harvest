@@ -25,6 +25,7 @@ normalization are intentionally decoupled from later scientific understanding.
 
 - Scopus Search STANDARD discovery with cursor pagination
 - ScienceDirect FULL XML retrieval
+- Optional publisher PDF download, preserved as a separate raw attachment
 - Provider abstraction, credential metadata, health, and quota monitoring
 - Quota-aware SQLite job queue with retry and resume states
 - DOI import from CSV, TSV, TXT, JSON, and JSONL
@@ -34,6 +35,8 @@ normalization are intentionally decoupled from later scientific understanding.
 - Provider → service → credential quota visibility
 - Failure center with pause, resume, retry, and cancel controls
 - Project-local secret storage without exporting API keys
+
+PDF OCR is not performed; PDFs are preserved as raw attachments for entitlement-respecting use.
 
 Not implemented in v0.1: LLM extraction, materials NER, relation extraction, knowledge graphs,
 Neo4j, vector databases, research-gap discovery, hypothesis generation, OCR, scraping, cloud
@@ -140,6 +143,24 @@ Optional year limiting and export:
 .venv/bin/lit-harvest fetch 10.1016/j.mtcomm.2026.115551
 ```
 
+### Download the publisher PDF as well
+
+```bash
+.venv/bin/lit-harvest fetch 10.1016/j.mtcomm.2026.115551 --pdf
+```
+
+PDFs are supplementary raw attachments. FULL XML remains the canonical normalization source. If PDF
+download is unavailable or not entitled, XML retrieval still succeeds and the JSON result contains a
+`pdf_error` field.
+
+To enable PDFs for every fetch, set:
+
+```yaml
+providers:
+  elsevier:
+    download_pdf: true
+```
+
 ### Import a DOI file
 
 ```bash
@@ -207,7 +228,7 @@ lit-harvest doctor [--network] [--json] [--config PATH]
 lit-harvest search --query QUERY --max-results N [--start-year N] [--end-year N]
                    [--export PATH] [--config PATH]
 
-lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--config PATH]
+lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--pdf|--no-pdf] [--config PATH]
 lit-harvest parse [--limit N] [--config PATH]
 lit-harvest export PATH [--format csv|json|jsonl] [--config PATH]
 lit-harvest jobs [--status STATUS] [--limit N] [--config PATH]
@@ -306,7 +327,8 @@ data/
 └── papers/
     └── 10.1016_j.example/
         ├── raw/
-        │   └── elsevier_xml.xml
+        │   ├── elsevier_xml.xml
+        │   └── elsevier_pdf.pdf        # optional
         ├── normalized/
         │   └── paper.json
         └── state.json
@@ -411,6 +433,7 @@ Implemented in v0.1:
 - DOI import
 - Scopus Search STANDARD
 - ScienceDirect FULL XML retrieval
+- Optional publisher PDF download, preserved as a separate raw attachment
 - deterministic Elsevier FULL XML normalization
 - CLI
 - FastAPI backend

@@ -13,7 +13,7 @@ from lit_harvest.config import (
 )
 from lit_harvest.credentials.manager import CredentialManager, CredentialUnavailableError
 from lit_harvest.models import QuotaScope, QuotaSource, QuotaStatus, QuotaUpdate
-from lit_harvest.providers.base import AuthenticationError
+from lit_harvest.providers.base import AuthenticationError, ProviderError
 from lit_harvest.providers.elsevier.client import ElsevierClient
 from lit_harvest.providers.elsevier.provider import ElsevierProvider
 from lit_harvest.providers.elsevier.search import parse_search_response
@@ -304,3 +304,58 @@ def test_healthcheck_does_not_crash_without_eligible_credential(database: Databa
     results = provider.healthcheck(network=True)
     assert len(results) == 2
     assert all(item.status.value == "unknown" for item in results)
+
+
+def test_fetch_pdf_returns_binary_and_tracks_quota(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ELSEVIER_KEY_PRIMARY", "secret")
+    creds = CredentialManager(config(), database)
+    creds.sync_configured_credentials()
+    payload = b"%PDF-1.7\nfake pdf body\n%%EOF"
+    client = ElsevierClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                content=payload,
+                headers={
+                    "Content-Type": "application/pdf",
+                    "X-RateLimit-Limit": "500",
+                    "X-RateLimit-Remaining": "499",
+                },
+            )
+        )
+    )
+    provider = ElsevierProvider(
+        database=database, credentials=creds, quotas=QuotaManager(database), client=client
+    )
+    result = provider.fetch_pdf("10.1016/x")
+    assert result.format == "pdf"
+    assert result.content.startswith(b"%PDF")
+    assert result.credential is not None
+    quota = database.get_quota("elsevier", "article_pdf", result.credential.id)
+    assert quota is not None
+    assert quota.remaining == 498
+
+
+def test_fetch_pdf_rejects_non_pdf_response(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ELSEVIER_KEY_PRIMARY", "secret")
+    creds = CredentialManager(config(), database)
+    creds.sync_configured_credentials()
+    provider = ElsevierProvider(
+        database=database,
+        credentials=creds,
+        quotas=QuotaManager(database),
+        client=ElsevierClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200, content=b"<xml/>", headers={"Content-Type": "text/xml"}
+                )
+            ),
+            sleep=lambda _: None,
+        ),
+    )
+    with pytest.raises(ProviderError, match="did not return a PDF"):
+        provider.fetch_pdf("10.1016/x")

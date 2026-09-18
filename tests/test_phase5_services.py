@@ -174,3 +174,38 @@ def test_fetch_now_completes_single_job_and_reuses(container: ServiceContainer) 
     second = container.acquisition.fetch_now("10.1016/j.test.1")
     assert second.reused is True
     assert container.database.count_jobs(JobStatus.SUCCESS) == 2
+
+
+def test_fetch_pdf_saves_attachment_and_reuses(container: ServiceContainer) -> None:
+    class FakePdfElsevier(FakeElsevier):
+        def __init__(self, xml: bytes, pdf_payload: bytes):
+            super().__init__(xml)
+            self.pdf_payload = pdf_payload
+
+        def fetch_pdf(self, doi):
+            return FullTextResult(
+                doi=doi,
+                content=self.pdf_payload,
+                content_type="application/pdf",
+                format="pdf",
+                http_status=200,
+                url="https://api.elsevier.com/content/article/doi/" + doi,
+                provider="elsevier",
+                service="article_pdf",
+                credential=None,
+            )
+
+    container.elsevier = FakePdfElsevier(
+        (Path(__file__).parent / "fixtures" / "science_direct_full.xml").read_bytes(),
+        b"%PDF-1.7\nservices fake\n%%EOF",
+    )
+    container.providers.register(container.elsevier)
+    container.acquisition.providers = container.providers
+    container.acquisition.fetch_now("10.1016/j.test.1")
+    paper = container.database.get_paper_by_doi("10.1016/j.test.1")
+    assert paper is not None
+    first = container.acquisition.fetch_pdf(paper.id)
+    assert Path(first["pdf_path"]).read_bytes().startswith(b"%PDF")
+    assert first["reused"] is False
+    second = container.acquisition.fetch_pdf(paper.id)
+    assert second["reused"] is True

@@ -196,6 +196,9 @@ class ElsevierProvider:
     def fetch_fulltext(self, doi: str) -> FullTextResult:
         return self._request_fulltext(doi, limit=True)
 
+    def fetch_pdf(self, doi: str) -> FullTextResult:
+        return self._request_pdf(doi)
+
     def _request_fulltext(self, doi: str, *, limit: bool = True) -> FullTextResult:
         excluded: set[str] = set()
         last_error: ProviderError | None = None
@@ -251,6 +254,73 @@ class ElsevierProvider:
             except ProviderError as exc:
                 last_error = exc
                 self._handle_provider_error("article_retrieval", credential, exc)
+                excluded.add(credential.id)
+                continue
+
+    def _request_pdf(self, doi: str) -> FullTextResult:
+        excluded: set[str] = set()
+        last_error: ProviderError | None = None
+        while True:
+            credential: Credential | None = None
+            try:
+                credential = self.credentials.select(
+                    self.name, "article_pdf", excluded_ids=excluded
+                )
+            except CredentialUnavailableError:
+                if last_error is not None:
+                    raise last_error from None
+                raise
+            try:
+                secret = self.credentials.resolve_secret(credential.id)
+                if not secret:
+                    excluded.add(credential.id)
+                    continue
+                response = self.client.request(
+                    f"{self.ARTICLE_PATH}/{quote(doi, safe='')}",
+                    params={"view": "FULL", "httpAccept": "application/pdf"},
+                    headers={"X-ELS-APIKey": secret, "Accept": "application/pdf"},
+                    service="article_pdf",
+                    credential_label=credential.name,
+                    paper_doi=doi,
+                )
+                content_type = response.headers.get("content-type", "")
+                if "application/pdf" not in content_type and not response.content.startswith(
+                    b"%PDF"
+                ):
+                    raise ProviderError(
+                        "Elsevier did not return a PDF for this article",
+                        status_code=response.status_code,
+                        context={"content_type": content_type},
+                    )
+                self.quotas.apply_headers(
+                    provider=self.name,
+                    service="article_pdf",
+                    credential_id=credential.id,
+                    quota_scope=credential.quota_scope,
+                    headers=response.headers,
+                )
+                self.quotas.local_usage(
+                    provider=self.name,
+                    service="article_pdf",
+                    credential_id=credential.id,
+                    quota_scope=credential.quota_scope,
+                    limit=10_000,
+                )
+                return FullTextResult(
+                    doi=doi,
+                    content=response.content,
+                    content_type=content_type or "application/pdf",
+                    format="pdf",
+                    http_status=response.status_code,
+                    url=response.url,
+                    provider=self.name,
+                    service="article_pdf",
+                    credential=credential,
+                    headers=response.headers,
+                )
+            except ProviderError as exc:
+                last_error = exc
+                self._handle_provider_error("article_pdf", credential, exc)
                 excluded.add(credential.id)
                 continue
 
