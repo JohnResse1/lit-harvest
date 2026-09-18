@@ -115,6 +115,7 @@ export const messages = {
     workerStopped: "Background worker not running",
     tickNow: "Process queue now",
     queueProcessed: "Queue processed.",
+    thisIsMyInstance: "Your private local instance",
   },
   zh: {
     brandSubtitle: "文献采集器",
@@ -228,6 +229,7 @@ export const messages = {
     workerStopped: "后台 worker 未运行",
     tickNow: "立即处理队列",
     queueProcessed: "队列处理完成。",
+    thisIsMyInstance: "这是你的本地私有实例",
   },
 } as const;
 

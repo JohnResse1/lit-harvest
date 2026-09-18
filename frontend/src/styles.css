@@ -142,3 +142,11 @@ dl dd { margin: 0; font-size: .88rem; }
 .number-input { width: 110px; padding: 9px 11px; border: 1px solid #dbe3ee; border-radius: 9px; }
 .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 @media (max-width: 900px) { .acquisition-grid { grid-template-columns: 1fr; } }
+
+.local-instance-badge {
+  color: #8fe0c2 !important;
+  font-size: .72rem !important;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.instance-line { color: #7184a2; font-size: .72rem; overflow-wrap: anywhere; }

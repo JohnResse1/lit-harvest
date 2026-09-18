@@ -45,8 +45,16 @@ class SchedulerConfig(BaseModel):
 
 
 class ServerConfig(BaseModel):
+    """Local dashboard binding.
+
+    v0.1 exposes no authentication, so the server is intentionally restricted
+    to loopback. `allow_non_loopback` exists only as an explicit, documented
+    escape hatch for users who knowingly add their own auth/proxy in front.
+    """
+
     host: str = "127.0.0.1"
     port: int = Field(default=8765, gt=0, lt=65536)
+    allow_non_loopback: bool = False
 
 
 class CredentialConfig(BaseModel):

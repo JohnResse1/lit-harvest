@@ -342,6 +342,44 @@ providers:
 
 旧的 `api_key_env` 字段仍兼容，但不再推荐用于本地。
 
+## 每人一个本地实例
+
+仓库里**只有代码**。每个人 clone 后得到自己独立的空实例，任何人的论文、配额和密钥都不会被
+其他人看到。
+
+```text
+GitHub 仓库（只有代码）
+        │  git clone
+        ▼
+你的机器 ──► ./.lit-harvest/secrets.json    你自己的 API Key
+         ──► ./data/lit_harvest.db          你自己的文献、配额、任务
+         ──► ./data/papers/                 你自己的原始 XML 和 PDF
+```
+
+| 保证 | 实现方式 |
+| --- | --- |
+| 数据不共享 | `data/`、`.lit-harvest/`、`config.yaml` 被 Git 忽略，从不提交 |
+| 密钥不共享 | 每个人执行 `lit-harvest auth set`，密钥只存在本机 |
+| 无法远程访问 | 看板只绑定 `127.0.0.1`；非本机绑定会被**拒绝** |
+| 不跨机器可见 | 不向任何服务器上传数据，没有服务端组件 |
+| 可自行验证 | `lit-harvest ui` 会打印用户名、主机名和实例 ID；`/api/instance` 可查询 |
+
+`lit-harvest ui` 拒绝在公网接口启动：
+
+```text
+Refusing to bind to 0.0.0.0: this dashboard has no authentication and would be
+readable by anyone who can reach the port.
+```
+
+只有在你自己加了认证或可信反向代理时才覆盖：
+
+```yaml
+server:
+  allow_non_loopback: false   # 除非完全理解暴露风险，否则保持 false
+```
+
+分享这个项目 = 分享**工具**，而不是分享语料库。
+
 ## 凭证与配额
 
 配额状态按 **提供商 → 服务 → 凭证** 三级跟踪，并持久化在 SQLite 中。

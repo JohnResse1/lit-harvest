@@ -345,6 +345,44 @@ providers:
 
 The legacy `api_key_env` field remains supported but is not the recommended local workflow.
 
+## One Instance Per Person
+
+The repository contains **code only**. Every person who clones it gets their own empty local
+instance, and no one can see anyone else's papers, quotas, or secrets.
+
+```text
+GitHub repo (code only)
+        │  git clone
+        ▼
+Your machine ──► ./.lit-harvest/secrets.json    your API key
+             ──► ./data/lit_harvest.db          your papers, quotas, jobs
+             ──► ./data/papers/                 your raw XML and PDFs
+```
+
+| Guarantee | How it is enforced |
+| --- | --- |
+| No shared data | `data/`, `.lit-harvest/`, `config.yaml` are Git-ignored and never committed |
+| No shared secrets | Each person runs `lit-harvest auth set` and stores their own key locally |
+| No remote access | The dashboard binds `127.0.0.1` only; non-loopback binds are **refused** |
+| No cross-machine visibility | Nothing is uploaded; there is no server component |
+| Easy to verify | `lit-harvest ui` prints your user, hostname, and instance ID; `/api/instance` returns it |
+
+`lit-harvest ui` refuses to start on a public interface:
+
+```text
+Refusing to bind to 0.0.0.0: this dashboard has no authentication and would be
+readable by anyone who can reach the port.
+```
+
+Override only if you add your own authentication or trusted reverse proxy:
+
+```yaml
+server:
+  allow_non_loopback: false   # keep false unless you fully understand the exposure
+```
+
+Sharing the project means sharing **the tool**, not the corpus.
+
 ## Credentials & Quotas
 
 Quota state is tracked at **provider → service → credential** granularity and persisted in SQLite.

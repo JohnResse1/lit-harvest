@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from lit_harvest.api.dependencies import ContainerDep
+from lit_harvest.utils.instance import local_identity
 
 router = APIRouter(tags=["system"])
 
@@ -14,6 +15,11 @@ router = APIRouter(tags=["system"])
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/instance")
+def instance(container: ContainerDep) -> dict[str, str]:
+    return local_identity(container.config.storage.root.parent)
 
 
 @router.get("/overview")

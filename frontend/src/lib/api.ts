@@ -28,8 +28,16 @@ export interface SearchOutcome {
   total_results: number | null;
 }
 
+export interface InstanceInfo {
+  instance_id: string;
+  user: string;
+  hostname: string;
+  project: string;
+}
+
 export const api = {
   overview: () => request<Overview>("/api/overview"),
+  instance: () => request<InstanceInfo>("/api/instance"),
   worker: () => request<WorkerStatus>("/api/worker"),
   search: (query: string, maxResults: number, startYear?: number, endYear?: number) =>
     request<SearchOutcome>("/api/search", {

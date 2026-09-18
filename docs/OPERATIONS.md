@@ -12,6 +12,24 @@ cp config.example.yaml config.yaml
 
 The UI binds only to `127.0.0.1` by default. Do not bind publicly: v0.1 has no authentication.
 
+## Local instance isolation
+
+The repository ships code only. Each user who clones it gets an independent local instance:
+
+```text
+./data/lit_harvest.db      one SQLite file per user
+./data/papers/             one raw/normalized tree per user
+./.lit-harvest/            one secret + instance ID per user
+```
+
+`lit-harvest ui` binds `127.0.0.1` and refuses non-loopback hosts unless
+`server.allow_non_loopback: true` is set. Verify which instance you are looking at:
+
+```bash
+lit-harvest ui          # prints user, hostname, instance ID
+curl -sS http://127.0.0.1:8765/api/instance
+```
+
 ## Credential storage
 
 The recommended local setup stores secrets outside the repository:

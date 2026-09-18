@@ -4,6 +4,8 @@ import { PaperDetailPage } from "./pages/PaperDetailPage";
 import { ProvidersPage } from "./pages/ProvidersPage";
 import { FailuresPage } from "./pages/FailuresPage";
 import { LanguageProvider, useLanguage } from "./lib/LanguageContext";
+import { api, type InstanceInfo } from "./lib/api";
+import { useEffect, useState } from "react";
 
 function CurrentPage() {
   const path = window.location.pathname;
@@ -17,6 +19,10 @@ function CurrentPage() {
 function Shell() {
   const path = window.location.pathname;
   const { language, setLanguage, t } = useLanguage();
+  const [instance, setInstance] = useState<InstanceInfo | null>(null);
+  useEffect(() => {
+    api.instance().then(setInstance).catch(() => setInstance(null));
+  }, []);
   const navigation = [
     ["/", t("navOverview")],
     ["/papers", t("navPapers")],
@@ -40,8 +46,14 @@ function Shell() {
           <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>EN</button>
         </div>
         <div className="sidebar-footer">
+          <span className="local-instance-badge">{t("thisIsMyInstance")}</span>
           <span>{t("localFirst")} · v0.1.0</span>
           <span>127.0.0.1</span>
+          {instance ? (
+            <span className="mono instance-line" title={instance.project}>
+              {instance.user}@{instance.hostname}
+            </span>
+          ) : null}
         </div>
       </aside>
       <main className="content">

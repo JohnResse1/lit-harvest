@@ -16,6 +16,7 @@ from lit_harvest.credentials.store import SecretStore, default_secret_ref
 from lit_harvest.models import JobStatus
 from lit_harvest.security import scan_repository
 from lit_harvest.services.container import ServiceContainer
+from lit_harvest.utils.instance import is_loopback, local_identity
 
 app = typer.Typer(
     name="lit-harvest",
@@ -447,11 +448,22 @@ def ui(
     loaded = load_config(config)
     selected_host = host or loaded.server.host
     selected_port = port or loaded.server.port
-    if selected_host not in {"127.0.0.1", "localhost", "::1"}:
+    if not is_loopback(selected_host) and not loaded.server.allow_non_loopback:
         console.print(
-            "[yellow]Warning: binding outside localhost exposes the UI without "
-            "authentication.[/yellow]"
+            "[red]Refusing to bind to "
+            f"{selected_host}:[/red] this dashboard has no authentication and would be "
+            "readable by anyone who can reach the port.\n"
+            "Set `server.allow_non_loopback: true` in config.yaml only if you have added "
+            "your own authentication or a trusted reverse proxy."
         )
+        raise typer.Exit(code=1)
+    identity = local_identity(loaded.storage.root.parent)
+    console.print(
+        f"[bold]Local instance[/bold] user={identity['user']} host={identity['hostname']}"
+    )
+    console.print(f"Instance ID: {identity['instance_id'][:12]}")
+    console.print("All papers, quotas, and secrets live only on this machine.")
+    console.print(f"Dashboard: http://{selected_host}:{selected_port}")
     uvicorn.run(create_app(loaded), host=selected_host, port=selected_port)
 
 
