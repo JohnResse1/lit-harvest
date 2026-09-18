@@ -79,6 +79,12 @@ class PermanentProviderError(ProviderError):
     code = "permanent_provider_error"
 
 
+class ProviderUnavailableError(ProviderError):
+    """No configured provider can perform the requested capability."""
+
+    code = "provider_unavailable"
+
+
 @dataclass(slots=True)
 class HealthCheckResult:
     provider: str
@@ -117,6 +123,13 @@ class FullTextResult:
 class Provider(Protocol):
     name: str
     display_name: str
+
+    # Capabilities. The workflow checks these instead of assuming that every
+    # provider can search or serve PDFs.
+    supports_search: bool = False
+    supports_fulltext: bool = False
+    supports_pdf: bool = False
+    supports_metadata: bool = False
 
     def healthcheck(
         self, service: str | None = None, *, network: bool = True

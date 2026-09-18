@@ -430,6 +430,24 @@ providers:
         quota_scope: institution
 ```
 
+### Multiple providers
+
+Providers are configured by name. Elsevier is currently the only implemented provider; other
+entries are accepted and skipped until implemented, so a shared config stays usable:
+
+```yaml
+providers:
+  entries:
+    elsevier:
+      enabled: true
+      download_pdf: false
+      credentials:
+        - name: university_primary
+          secret_ref: file:elsevier:university_primary
+```
+
+The original single-provider layout (`providers: {elsevier: {...}}`) still works unchanged.
+
 ### Secret reference formats
 
 | Reference | Backend | Recommended |

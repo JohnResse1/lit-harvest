@@ -24,6 +24,15 @@ from lit_harvest.storage.database import Database
 class ElsevierProvider:
     name = "elsevier"
     display_name = "Elsevier"
+    supports_search = True
+    supports_fulltext = True
+    supports_pdf = True
+    supports_metadata = True
+
+    # Service identifiers used for quotas, jobs, and health reporting.
+    search_service = "scopus_search"
+    fulltext_service = "article_retrieval"
+    pdf_service = "article_pdf"
     SEARCH_PATH = "/content/search/scopus"
     ARTICLE_PATH = "/content/article/doi"
 

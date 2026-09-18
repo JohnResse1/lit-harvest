@@ -17,6 +17,13 @@ from lit_harvest.services.container import ServiceContainer
 class FakeElsevier:
     name = "elsevier"
     display_name = "Elsevier"
+    supports_search = True
+    supports_fulltext = True
+    supports_pdf = True
+    supports_metadata = True
+    search_service = "scopus_search"
+    fulltext_service = "article_retrieval"
+    pdf_service = "article_pdf"
 
     def __init__(self, xml: bytes):
         self.xml = xml

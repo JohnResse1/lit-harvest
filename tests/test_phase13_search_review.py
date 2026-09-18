@@ -13,6 +13,13 @@ from lit_harvest.services.search_sessions import SearchCandidate
 class FakeSearchProvider:
     name = "elsevier"
     display_name = "Elsevier"
+    supports_search = True
+    supports_fulltext = True
+    supports_pdf = False
+    supports_metadata = True
+    search_service = "scopus_search"
+    fulltext_service = "article_retrieval"
+    pdf_service = "article_pdf"
 
     def __init__(self, xml: bytes):
         self.xml = xml
@@ -224,6 +231,13 @@ def test_selection_failure_message_has_no_raw_provider_xml(tmp_path: Path) -> No
     class FailingProvider:
         name = "elsevier"
         display_name = "Elsevier"
+        supports_search = False
+        supports_fulltext = True
+        supports_pdf = False
+        supports_metadata = True
+        search_service = "scopus_search"
+        fulltext_service = "article_retrieval"
+        pdf_service = "article_pdf"
 
         def fetch_fulltext(self, doi: str):
             raise NotFoundError(

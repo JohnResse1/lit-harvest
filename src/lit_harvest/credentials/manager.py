@@ -25,18 +25,22 @@ class CredentialManager:
         self.secrets = secrets or SecretStore(project_root=project_root)
 
     def sync_configured_credentials(self) -> list[str]:
+        """Upsert credential metadata for every configured provider."""
         ids: list[str] = []
-        for provider in (self.config.providers.elsevier,):
+        valid_scopes = {value.value for value in QuotaScope}
+        for provider_name, provider in self.config.providers.all().items():
             if not provider.enabled:
                 continue
             for item in provider.credentials:
-                scope = item.quota_scope
-                if scope not in {value.value for value in QuotaScope}:
-                    scope = QuotaScope.UNKNOWN.value
+                scope = (
+                    item.quota_scope
+                    if item.quota_scope in valid_scopes
+                    else QuotaScope.UNKNOWN.value
+                )
                 credential_id = self.database.upsert_credential(
-                    provider="elsevier",
+                    provider=provider_name,
                     name=item.name,
-                    secret_ref=item.resolved_secret_ref,
+                    secret_ref=item.secret_ref_for(provider_name),
                     account_label=item.account_label,
                     institution=item.institution,
                     quota_scope=scope,
@@ -44,6 +48,9 @@ class CredentialManager:
                 )
                 ids.append(credential_id)
         return ids
+
+    def providers(self) -> list[str]:
+        return self.config.providers.names()
 
     def list_credentials(
         self, provider: str, *, include_secret_availability: bool = True

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StorageConfig(BaseModel):
@@ -66,24 +66,49 @@ class CredentialConfig(BaseModel):
     quota_scope: str = "unknown"
     enabled: bool = True
 
-    @property
-    def resolved_secret_ref(self) -> str:
+    def secret_ref_for(self, provider: str) -> str:
+        """Resolve the secret reference, defaulting to a provider-local file."""
         if self.secret_ref:
             return self.secret_ref
         if self.api_key_env:
             return self.api_key_env if ":" in self.api_key_env else f"env:{self.api_key_env}"
-        return f"file:elsevier:{self.name}"
+        return f"file:{provider}:{self.name}"
+
+    @property
+    def resolved_secret_ref(self) -> str:
+        """Backwards-compatible accessor for the default (Elsevier) provider."""
+        return self.secret_ref_for("elsevier")
 
 
 class ServiceConfig(BaseModel):
     enabled: bool = True
 
 
-class ElsevierConfig(BaseModel):
+class ProviderConfig(BaseModel):
+    """Configuration for one external provider.
+
+    Kept generic so adding a publisher is a configuration change rather than a
+    code change. Provider-specific defaults live in the provider implementation.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
     enabled: bool = True
-    base_url: str = "https://api.elsevier.com"
+    base_url: str | None = None
     timeout_seconds: float = 30.0
     download_pdf: bool = False
+    services: dict[str, ServiceConfig] = Field(default_factory=dict)
+    credentials: list[CredentialConfig] = Field(default_factory=list)
+
+    def service_enabled(self, name: str) -> bool:
+        service = self.services.get(name)
+        return bool(service.enabled) if service else True
+
+
+class ElsevierConfig(ProviderConfig):
+    """Elsevier defaults, kept for backwards compatibility."""
+
+    base_url: str = "https://api.elsevier.com"
     services: dict[str, ServiceConfig] = Field(
         default_factory=lambda: {
             "scopus_search": ServiceConfig(),
@@ -91,11 +116,71 @@ class ElsevierConfig(BaseModel):
             "article_pdf": ServiceConfig(),
         }
     )
-    credentials: list[CredentialConfig] = Field(default_factory=list)
+
+
+def _default_providers() -> dict[str, ProviderConfig]:
+    return {"elsevier": ElsevierConfig()}
 
 
 class ProvidersConfig(BaseModel):
-    elsevier: ElsevierConfig = Field(default_factory=ElsevierConfig)
+    """Registry of configured providers, keyed by provider name.
+
+    Accepts both the modern shape::
+
+        providers:
+          entries:
+            elsevier: {...}
+
+    and the original (still supported) shape::
+
+        providers:
+          elsevier: {...}
+    """
+
+    entries: dict[str, ProviderConfig] = Field(default_factory=_default_providers)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_shape(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        legacy = {key: item for key, item in value.items() if key != "entries"}
+        declared = value.get("entries")
+        entries: dict[str, object] = dict(declared) if isinstance(declared, dict) else {}
+        # `providers: {}` means "use defaults", not "no providers at all".
+        if not entries and not legacy:
+            return {"entries": {name: item for name, item in _default_providers().items()}}
+        for name, item in legacy.items():
+            existing = entries.get(name)
+            if isinstance(existing, dict) and isinstance(item, dict):
+                merged = dict(existing)
+                merged.update(item)
+                entries[name] = merged
+            else:
+                entries[name] = item
+        return {"entries": entries}
+
+    # --- accessors -------------------------------------------------------
+
+    def get(self, name: str) -> ProviderConfig:
+        try:
+            return self.entries[name]
+        except KeyError as exc:
+            raise KeyError(f"Provider is not configured: {name}") from exc
+
+    def names(self) -> list[str]:
+        return sorted(self.entries)
+
+    def all(self) -> dict[str, ProviderConfig]:
+        return dict(self.entries)
+
+    def enabled(self) -> dict[str, ProviderConfig]:
+        return {name: item for name, item in self.entries.items() if item.enabled}
+
+    @property
+    def elsevier(self) -> ProviderConfig:
+        """Backwards-compatible accessor."""
+        return self.entries.get("elsevier", ElsevierConfig())
 
 
 class AppConfig(BaseModel):

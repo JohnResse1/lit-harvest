@@ -105,6 +105,13 @@ def test_api_import_run_now_executes_jobs(tmp_path: Path, monkeypatch) -> None:
     class FakeProvider:
         name = "elsevier"
         display_name = "Elsevier"
+        supports_search = True
+        supports_fulltext = True
+        supports_pdf = False
+        supports_metadata = True
+        search_service = "scopus_search"
+        fulltext_service = "article_retrieval"
+        pdf_service = "article_pdf"
 
         def fetch_fulltext(self, doi: str) -> FullTextResult:
             return FullTextResult(
@@ -202,6 +209,13 @@ def test_doi_endpoint_returns_clean_error_for_missing_article(tmp_path: Path, mo
     class NotFoundProvider:
         name = "elsevier"
         display_name = "Elsevier"
+        supports_search = True
+        supports_fulltext = True
+        supports_pdf = False
+        supports_metadata = True
+        search_service = "scopus_search"
+        fulltext_service = "article_retrieval"
+        pdf_service = "article_pdf"
 
         def fetch_fulltext(self, doi: str):
             raise NotFoundError(
@@ -241,6 +255,13 @@ def test_doi_endpoint_maps_entitlement_to_403(tmp_path: Path) -> None:
     class BlockedProvider:
         name = "elsevier"
         display_name = "Elsevier"
+        supports_search = True
+        supports_fulltext = True
+        supports_pdf = False
+        supports_metadata = True
+        search_service = "scopus_search"
+        fulltext_service = "article_retrieval"
+        pdf_service = "article_pdf"
 
         def fetch_fulltext(self, doi: str):
             raise EntitlementError("not entitled", status_code=403)

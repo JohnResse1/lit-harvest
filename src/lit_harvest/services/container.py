@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from lit_harvest.config import AppConfig, load_config
+from lit_harvest.config import AppConfig, ProviderConfig, load_config
 from lit_harvest.credentials.manager import CredentialManager
 from lit_harvest.providers.elsevier import ElsevierProvider
-from lit_harvest.providers.registry import ProviderRegistry, build_default_registry
+from lit_harvest.providers.registry import ProviderRegistry
 from lit_harvest.quotas.manager import QuotaManager
 from lit_harvest.scheduler.queue import QueueControl
 from lit_harvest.scheduler.scheduler import Scheduler
@@ -37,15 +37,7 @@ class ServiceContainer:
         self.quotas = QuotaManager(self.database)
         self.queue_control = QueueControl()
         self._sync_providers()
-        elsevier_config = self.config.providers.elsevier
-        self.elsevier = ElsevierProvider(
-            database=self.database,
-            credentials=self.credentials,
-            quotas=self.quotas,
-            timeout_seconds=elsevier_config.timeout_seconds,
-            max_attempts=self.config.scheduler.retry.max_attempts,
-        )
-        self.providers: ProviderRegistry = build_default_registry(self.elsevier)
+        self.providers: ProviderRegistry = self._build_providers()
         self.papers = PaperService(self.database)
         self.normalization = NormalizationService(self.database, self.storage)
         self.acquisition = AcquisitionService(
@@ -70,15 +62,53 @@ class ServiceContainer:
         self.maintenance = MaintenanceService(self.database, self.scheduler)
         self.storage_settings = StorageSettingsService(self.config, self.database)
 
-    def _sync_providers(self) -> None:
-        elsevier = self.config.providers.elsevier
-        services = [(name, service.enabled) for name, service in sorted(elsevier.services.items())]
-        self.database.sync_provider(
-            "elsevier",
-            "Elsevier",
-            services,
-            enabled=elsevier.enabled,
+    def _build_providers(self) -> ProviderRegistry:
+        """Instantiate every enabled provider described by the configuration.
+
+        New providers are added here as they are implemented; the rest of the
+        application only talks to the registry and its capabilities.
+        """
+        registry = ProviderRegistry()
+        factories = {
+            "elsevier": self._build_elsevier,
+        }
+        for name, provider_config in self.config.providers.all().items():
+            if not provider_config.enabled:
+                continue
+            factory = factories.get(name)
+            if factory is None:
+                # Configured but not implemented in this build: ignore rather
+                # than crash, so a shared config stays usable.
+                continue
+            registry.register(factory(provider_config))
+        return registry
+
+    def _build_elsevier(self, provider_config: ProviderConfig) -> ElsevierProvider:
+        provider = ElsevierProvider(
+            database=self.database,
+            credentials=self.credentials,
+            quotas=self.quotas,
+            timeout_seconds=provider_config.timeout_seconds,
+            max_attempts=self.config.scheduler.retry.max_attempts,
         )
+        # Kept as an attribute for backwards compatibility with earlier code.
+        self.elsevier = provider
+        return provider
+
+    def _sync_providers(self) -> None:
+        """Register provider/service rows and credential metadata in SQLite."""
+        display_names = {"elsevier": "Elsevier"}
+        for name, provider_config in self.config.providers.all().items():
+            services = [
+                (service_name, service.enabled)
+                for service_name, service in sorted(provider_config.services.items())
+            ]
+            self.database.sync_provider(
+                name,
+                display_names.get(name, name.title()),
+                services,
+                enabled=provider_config.enabled,
+            )
         self.credentials.sync_configured_credentials()
 
     def doctor(self, *, network: bool = False) -> DoctorResult:
@@ -88,7 +118,11 @@ class ServiceContainer:
             database={"ok": db_ok, "message": db_message},
             storage={"ok": storage_ok, "message": storage_message},
         )
-        credentials = self.credentials.list_credentials("elsevier")
+        credentials = [
+            item
+            for name in self.config.providers.names()
+            for item in self.credentials.list_credentials(name)
+        ]
         checks["credentials"] = [
             {
                 "name": item.name,
@@ -100,7 +134,11 @@ class ServiceContainer:
             }
             for item in credentials
         ]
-        health = self.elsevier.healthcheck(network=network)
+        health = [
+            result
+            for provider in self.providers.all()
+            for result in provider.healthcheck(network=network)
+        ]
         checks["providers"] = [
             {
                 "provider": item.provider,

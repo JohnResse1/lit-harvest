@@ -89,16 +89,27 @@ class DashboardService:
             ],
             "quota": {
                 "states": quotas,
-                "runways": [
-                    self.scheduler.quota_runway(provider="elsevier", service="article_retrieval"),
-                    self.scheduler.quota_runway(provider="elsevier", service="scopus_search"),
-                ],
+                "runways": self._quota_runways(),
             },
             "failures": failures,
             "recent_papers": recent_papers,
             "queue": {"paused": self.scheduler.queue.paused, "reason": self.scheduler.queue.reason},
             "generated_at": datetime.now(UTC).isoformat(),
         }
+
+    def _quota_runways(self) -> list[dict[str, Any]]:
+        """A runway entry for every provider/service the instance knows about."""
+        runways: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for quota in self.database.list_quotas():
+            key = (quota.provider, quota.service)
+            if key in seen:
+                continue
+            seen.add(key)
+            runways.append(
+                self.scheduler.quota_runway(provider=quota.provider, service=quota.service)
+            )
+        return runways
 
     def providers(self) -> list[dict[str, Any]]:
         providers = self.database.list_providers()

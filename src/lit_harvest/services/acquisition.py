@@ -20,9 +20,10 @@ from lit_harvest.models import (
     PaperStage,
     TaskType,
 )
-from lit_harvest.providers.base import FullTextResult
+from lit_harvest.providers.base import FullTextResult, ProviderUnavailableError
 from lit_harvest.providers.registry import ProviderRegistry
 from lit_harvest.services.normalization import NormalizationService
+from lit_harvest.services.resolver import Resolver
 from lit_harvest.services.search_sessions import SearchCandidate, SearchSessionStore
 from lit_harvest.storage.database import Database
 from lit_harvest.storage.files import DocumentStorage, sha256_bytes
@@ -89,6 +90,7 @@ class AcquisitionService:
         self.storage = storage
         self.providers = providers
         self.normalization = normalization
+        self.resolver = Resolver(providers)
         self.search_sessions = SearchSessionStore(database)
 
     def search(
@@ -100,7 +102,12 @@ class AcquisitionService:
         end_year: int | None = None,
         export: str | None = None,
     ) -> SearchResult:
-        provider = self.providers.get("elsevier")
+        provider = self.providers.first_with_capability("supports_search")
+        if provider is None:
+            raise ProviderUnavailableError(
+                "No configured provider supports literature search. "
+                "Configure a discovery provider such as Elsevier Scopus."
+            )
         pages = provider.search(
             query,
             max_results=max_results,
@@ -298,11 +305,12 @@ class AcquisitionService:
                     PaperCreate(doi=item.doi, discovery_source="doi_import")
                 )
             paper_ids.append(paper.id)
+            route = self.resolver.best(item.doi)
             job = JobCreate(
                 task_type=TaskType.FETCH_FULLTEXT,
                 paper_id=paper.id,
-                provider="elsevier",
-                service="article_retrieval",
+                provider=route.provider if route else None,
+                service=route.service if route else None,
                 max_attempts=self.config.scheduler.retry.max_attempts,
                 payload={"doi": item.doi},
             )
@@ -331,12 +339,13 @@ class AcquisitionService:
                 PaperCreate(doi=normalized, discovery_source="single_doi")
             )
         before = self.database.count_jobs()
+        route = self.resolver.best(normalized)
         self.database.create_job(
             JobCreate(
                 task_type=TaskType.FETCH_FULLTEXT,
                 paper_id=paper.id,
-                provider="elsevier",
-                service="article_retrieval",
+                provider=route.provider if route else None,
+                service=route.service if route else None,
                 max_attempts=self.config.scheduler.retry.max_attempts,
                 payload={"doi": normalized},
             )
@@ -350,12 +359,13 @@ class AcquisitionService:
             paper = self.database.create_paper(
                 PaperCreate(doi=normalized, discovery_source="single_doi")
             )
+        route = self.resolver.best(normalized)
         job = self.database.create_job(
             JobCreate(
                 task_type=TaskType.FETCH_FULLTEXT,
                 paper_id=paper.id,
-                provider="elsevier",
-                service="article_retrieval",
+                provider=route.provider if route else None,
+                service=route.service if route else None,
                 max_attempts=self.config.scheduler.retry.max_attempts,
                 payload={"doi": normalized},
             )
@@ -379,9 +389,9 @@ class AcquisitionService:
             raise KeyError(f"Paper not found: {paper_id}")
         if not paper.doi:
             raise ValueError("PDF download requires a DOI")
-        provider = self.providers.get("elsevier")
-        if not hasattr(provider, "fetch_pdf"):
-            raise TypeError("Provider does not support PDF retrieval")
+        provider = self.providers.first_with_capability("supports_pdf")
+        if provider is None or not hasattr(provider, "fetch_pdf"):
+            raise ProviderUnavailableError("No configured provider can supply publisher PDFs.")
         existing = self.storage.paper_dir(paper.doi) / "raw" / "elsevier_pdf.pdf"
         if existing.exists():
             self.database.add_paper_extra(
@@ -433,6 +443,22 @@ class AcquisitionService:
                 )
         return {"paper_id": paper.id, "doi": paper.doi, "pdf_path": str(path), "reused": False}
 
+    def _provider_for_fetch(self, job: Job, doi: str) -> Any:
+        """Pick the provider for a job, honouring an explicitly pinned route."""
+        if job.provider:
+            provider = self.providers.get(job.provider)
+            if not getattr(provider, "supports_fulltext", False):
+                raise ProviderUnavailableError(
+                    f"Provider {provider.name} cannot retrieve full text."
+                )
+            return provider
+        route = self.resolver.best(doi)
+        if route is None:
+            raise ProviderUnavailableError(
+                "No configured provider can retrieve full text for this DOI."
+            )
+        return self.providers.get(route.provider)
+
     def pdf_enabled(self, override: bool | None = None) -> bool:
         if override is not None:
             return override
@@ -459,9 +485,7 @@ class AcquisitionService:
                 document=paper.extra.get("normalized"),
             )
 
-        provider = self.providers.get(job.provider or "elsevier")
-        if not hasattr(provider, "fetch_fulltext"):
-            raise TypeError(f"Provider does not support full-text retrieval: {provider.name}")
+        provider = self._provider_for_fetch(job, doi)
         result: FullTextResult = provider.fetch_fulltext(doi)
         suffix = "xml" if result.format == "xml" else result.format
         raw_path = self.storage.write_raw(
