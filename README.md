@@ -1,105 +1,170 @@
+<div align="center">
+
 # Literature Harvester
 
-[English](README.md) | [简体中文](README-ZH.md)
+**Local-first academic literature discovery, acquisition, preservation, and deterministic normalization.**
 
-Local-first academic literature discovery, acquisition, raw preservation, and deterministic
-normalization. v0.1 implements the acquisition and structured-corpus foundation and deliberately
-stops before LLM extraction and knowledge graphs.
+[English](README.md) · [简体中文](README-ZH.md)
 
-## What It Does
+[![CI](https://github.com/JohnResse1/lit-harvest/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnResse1/lit-harvest/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/tests-59%20passing-2ea44f.svg)](tests)
+[![Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
+[![mypy: strict](https://img.shields.io/badge/mypy-strict-1674c1.svg)](https://mypy-lang.org/)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](pyproject.toml)
+[![Local-first](https://img.shields.io/badge/local--first-127.0.0.1-6f42c1.svg)](#design-principles)
+[![Secrets](https://img.shields.io/badge/secrets-project--local%20%7C%200600-brightgreen.svg)](SECURITY.md)
 
-Literature Harvester lets one researcher:
+</div>
 
-1. Search literature with Elsevier Scopus Search STANDARD.
-2. Import DOI lists from CSV, TSV, TXT, JSON, and JSONL.
-3. Resolve and retrieve legally accessible publisher full text.
-4. Preserve raw publisher responses without loss.
-5. Normalize Elsevier ScienceDirect FULL XML into a provider-independent `PaperDocument`.
-6. Track credentials, quotas, retries, failures, and resumable jobs.
-7. Inspect the corpus through a CLI and a local web dashboard.
+---
 
-The system is provider-aware internally but provider-agnostic to the user. Acquisition and
-normalization are intentionally decoupled from later scientific understanding.
+Literature Harvester is a local-first toolkit for researchers who need a **reproducible,
+entitlement-respecting literature pipeline**. It discovers papers, imports DOI lists, retrieves
+publisher full text through official APIs, preserves raw data, and normalizes it into a
+provider-independent document model.
+
+> **v0.1 scope** — acquisition and structured corpus only. Scientific LLM extraction, entity/relation
+> extraction, and knowledge graphs are deliberately out of scope.
+
+---
+
+## Table of Contents
+
+- [Why This Exists](#why-this-exists)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Common Workflows](#common-workflows)
+- [CLI Reference](#cli-reference)
+- [Configuration](#configuration)
+- [Credentials & Quotas](#credentials--quotas)
+- [Storage Layout](#storage-layout)
+- [Local API](#local-api)
+- [Web Dashboard](#web-dashboard)
+- [Security](#security)
+- [Portability](#portability)
+- [Development](#development)
+- [Documentation](#documentation)
+- [Scope & Roadmap](#scope--roadmap)
+- [License](#license)
+
+---
+
+## Why This Exists
+
+Most literature tooling mixes three very different concerns:
+
+```text
+1. Acquiring documents      → network, entitlements, quotas, retries
+2. Understanding structure  → deterministic parsing of publisher data
+3. Scientific interpretation → LLM extraction, relations, hypotheses
+```
+
+Literature Harvester deliberately builds **only the first two layers**, and keeps them decoupled so
+the third can be added later without re-downloading a single article.
+
+## Design Principles
+
+| Principle | Meaning |
+| --- | --- |
+| **Local-first** | Binds to `127.0.0.1`; all state, raw data, and secrets stay on your machine. |
+| **Provider-aware, user-agnostic** | Elsevier is the first provider, but the workflow talks to a provider interface. |
+| **Raw data is sacred** | Publisher responses are stored byte-for-byte and never discarded when parsers evolve. |
+| **No quota evasion** | Credential failover only happens across independently authorized credentials. |
+| **Official APIs only** | No scraping, no OCR, no bypassing publisher access controls. |
 
 ## Features
 
-- Scopus Search STANDARD discovery with cursor pagination
-- ScienceDirect FULL XML retrieval
-- Optional publisher PDF download, preserved as a separate raw attachment
-- Provider abstraction, credential metadata, health, and quota monitoring
-- Quota-aware SQLite job queue with retry and resume states
-- DOI import from CSV, TSV, TXT, JSON, and JSONL
-- Deterministic Elsevier FULL XML to `PaperDocument` normalization
-- Typer CLI and React/FastAPI local dashboard
-- Bilingual dashboard with runtime English / 中文 switching
-- Server-Sent Events (SSE) for live dashboard updates
-- Provider → service → credential quota visibility
-- Failure center with pause, resume, retry, and cancel controls
-- Project-local secret storage without exporting API keys
-- Repository secret-leak scanner with CI enforcement
-- Portable runtime paths resolved from the active configuration file
+| Area | Capability |
+| --- | --- |
+| **Discovery** | Scopus Search `STANDARD`, cursor pagination, raw JSON preserved |
+| **Full text** | ScienceDirect `FULL` XML retrieval |
+| **PDF** | Optional publisher PDF preserved as a raw attachment |
+| **Import** | DOI lists from CSV, TSV, TXT, JSON, JSONL with normalization + dedup |
+| **Normalization** | Deterministic FULL XML → `PaperDocument` (sections, figures, tables, references) |
+| **Scheduling** | Persistent SQLite job queue with retry, resume, and `waiting_for_quota` |
+| **Quotas** | Provider → service → credential tracking with header parsing and local estimates |
+| **Credentials** | Project-local `0600` secret file, optional OS keyring, legacy env support |
+| **CLI** | `doctor`, `search`, `fetch`, `parse`, `auth`, `security`, `ui`, `jobs`, `quota`, `retry` |
+| **Dashboard** | React + FastAPI, **bilingual EN / 中文**, live updates over SSE |
+| **Security** | Built-in secret-leak scanner enforced in CI |
 
-PDF OCR is not performed; PDFs are preserved as raw attachments for entitlement-respecting use.
+## Architecture
 
-Not implemented in v0.1: LLM extraction, materials NER, relation extraction, knowledge graphs,
-Neo4j, vector databases, research-gap discovery, hypothesis generation, OCR, scraping, cloud
-deployment, authentication, and UI secret editing.
+```mermaid
+flowchart TD
+    U[Researcher] --> CLI[Typer CLI]
+    U --> UI[React Dashboard]
+    CLI --> SVC[Service Layer]
+    UI --> API[FastAPI + SSE]
+    API --> SVC
+
+    SVC --> REG[Paper Registry]
+    SVC --> JOBS[Job Queue]
+    SVC --> RES[Resolver]
+    RES --> PROV[Provider Registry]
+
+    PROV --> ELS[Elsevier Provider]
+    ELS --> CRED[Credential Manager]
+    ELS --> QUOTA[Quota Manager]
+    JOBS --> SCHED[Scheduler]
+
+    ELS --> RAW[(Raw Storage)]
+    RAW --> PARSE[Deterministic Parser]
+    PARSE --> DOC[PaperDocument]
+    DOC --> JSON[(Normalized JSON)]
+
+    subgraph Future["Future (not in v0.1)"]
+        DOC -.-> NER[Scientific Extraction]
+        NER -.-> KG[Knowledge Graph]
+    end
+```
+
+**Boundaries:** CLI and FastAPI both call the same service layer. Provider-specific logic never leaks
+into routes, CLI commands, or the frontend.
 
 ## Requirements
 
-- Python 3.11+
-- An Elsevier API key with the access your institution or account is authorized to use
-- Node.js only when rebuilding the frontend from source
-
-The packaged UI is prebuilt and bilingual, so normal users do not need Node.js.
+- **Python 3.11+**
+- An **Elsevier API key** with the access your institution/account is authorized to use
+- **Node.js** only if you rebuild the frontend from source
 
 ## Quick Start
 
-### 1. Enter the project
+### 1. Install
 
 ```bash
-cd /path/to/lit-harvest
-```
+git clone https://github.com/JohnResse1/lit-harvest.git
+cd lit-harvest
 
-### 2. Install
-
-```bash
 python3.11 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'
 cp config.example.yaml config.yaml
 ```
 
-### 3. Store your Elsevier credential
+### 2. Store your Elsevier credential
 
-The recommended workflow keeps the secret inside this project:
+Secrets stay inside the project — no shell environment variables required:
 
 ```bash
 .venv/bin/lit-harvest auth set elsevier university_primary
 ```
 
-The command prompts with hidden input:
-
 ```text
 API key for elsevier/university_primary:
 ```
 
-The secret is stored at:
+| Property | Value |
+| --- | --- |
+| Location | `<project>/.lit-harvest/secrets.json` |
+| Permission | `0600` |
+| Git | Ignored by `.gitignore` |
+| Never written to | `config.yaml`, SQLite, logs, API responses, browser |
 
-```text
-<project>/.lit-harvest/secrets.json
-```
-
-The file is created with permission `0600`, and `.lit-harvest/` is ignored by Git.
-
-The secret is not written to:
-
-- `config.yaml`
-- SQLite
-- logs
-- API responses
-- browser state
-
-`config.yaml` contains only a reference:
+`config.yaml` stores only a reference:
 
 ```yaml
 providers:
@@ -107,9 +172,11 @@ providers:
     credentials:
       - name: university_primary
         secret_ref: file:elsevier:university_primary
+        institution: YOUR_INSTITUTION
+        quota_scope: institution
 ```
 
-### 4. Verify
+### 3. Verify
 
 ```bash
 .venv/bin/lit-harvest auth list
@@ -117,27 +184,16 @@ providers:
 .venv/bin/lit-harvest doctor --network
 ```
 
-If no credential is configured, `doctor` exits nonzero by design.
+`doctor` exits nonzero when required credentials are missing — by design.
 
 ## Common Workflows
 
-### Search for a topic
+### Search by topic
 
 ```bash
 .venv/bin/lit-harvest search \
   --query 'TITLE-ABS-KEY("solid-state battery")' \
   --max-results 100
-```
-
-Optional year limiting and export:
-
-```bash
-.venv/bin/lit-harvest search \
-  --query 'TITLE-ABS-KEY("solid-state electrolyte")' \
-  --max-results 500 \
-  --start-year 2020 \
-  --end-year 2026 \
-  --export papers.jsonl
 ```
 
 ### Fetch one DOI
@@ -146,17 +202,16 @@ Optional year limiting and export:
 .venv/bin/lit-harvest fetch 10.1016/j.mtcomm.2026.115551
 ```
 
-### Download the publisher PDF as well
+### Fetch XML + publisher PDF
 
 ```bash
 .venv/bin/lit-harvest fetch 10.1016/j.mtcomm.2026.115551 --pdf
 ```
 
-PDFs are supplementary raw attachments. FULL XML remains the canonical normalization source. If PDF
-download is unavailable or not entitled, XML retrieval still succeeds and the JSON result contains a
-`pdf_error` field.
+PDFs are supplementary raw attachments; FULL XML remains the canonical normalization source. If PDF
+access is unavailable, XML still succeeds and the JSON result contains a `pdf_error` field.
 
-To enable PDFs for every fetch, set:
+Enable PDFs for every fetch:
 
 ```yaml
 providers:
@@ -170,17 +225,11 @@ providers:
 .venv/bin/lit-harvest fetch papers.csv --doi-column doi
 ```
 
-Supported formats:
-
 ```text
-.csv
-.tsv
-.txt
-.json
-.jsonl
+.csv  .tsv  .txt  .json  .jsonl
 ```
 
-DOI variants are normalized and deduplicated:
+These DOI forms are normalized and deduplicated:
 
 ```text
 10.1016/j.xxx
@@ -190,31 +239,23 @@ doi:10.1016/j.xxx
 DOI: 10.1016/j.xxx
 ```
 
-Invalid values are reported without terminating the batch.
-
-### Parse downloaded raw XML
+### Re-normalize downloaded raw XML
 
 ```bash
-.venv/bin/lit-harvest parse
+.venv/bin/lit-harvest parse          # only unparsed papers
+.venv/bin/lit-harvest parse --force  # re-parse everything after a parser upgrade
 ```
 
-This re-normalizes downloaded raw files without downloading the article again.
+No re-download is performed.
 
-### Launch the local dashboard
+### Launch the dashboard
 
 ```bash
 .venv/bin/lit-harvest ui
 ```
 
-Default address:
-
 ```text
 http://127.0.0.1:8765
-```
-
-API documentation:
-
-```text
 http://127.0.0.1:8765/docs
 ```
 
@@ -222,31 +263,31 @@ http://127.0.0.1:8765/docs
 
 ```text
 lit-harvest version
-lit-harvest auth set [provider] [name] [--secret-ref REF] [--config PATH]
-lit-harvest auth list [--config PATH]
-lit-harvest auth test [provider] [name] [--config PATH]
-lit-harvest auth remove [provider] [name] [--secret-ref REF] [--config PATH]
-lit-harvest doctor [--network] [--json] [--config PATH]
+lit-harvest doctor  [--network] [--json] [--config PATH]
 
-lit-harvest search --query QUERY --max-results N [--start-year N] [--end-year N]
-                   [--export PATH] [--config PATH]
+lit-harvest auth set    [provider] [name] [--secret-ref REF] [--config PATH]
+lit-harvest auth list   [--config PATH]
+lit-harvest auth test   [provider] [name] [--config PATH]
+lit-harvest auth remove [provider] [name] [--secret-ref REF] [--config PATH]
+
+lit-harvest search --query QUERY --max-results N
+                   [--start-year N] [--end-year N] [--export PATH] [--config PATH]
 
 lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--pdf|--no-pdf] [--config PATH]
-lit-harvest parse [--limit N] [--config PATH]
+lit-harvest parse [--limit N] [--force] [--config PATH]
 lit-harvest export PATH [--format csv|json|jsonl] [--config PATH]
 lit-harvest jobs [--status STATUS] [--limit N] [--config PATH]
 lit-harvest quota [--config PATH]
 lit-harvest pause [--reason TEXT] [--config PATH]
 lit-harvest resume [--config PATH]
 lit-harvest retry --job-id ID | --transient [--config PATH]
+lit-harvest security scan [ROOT] [--json]
 lit-harvest ui [--host HOST] [--port PORT] [--config PATH]
 ```
 
 ## Configuration
 
 Start from [`config.example.yaml`](config.example.yaml).
-
-Example:
 
 ```yaml
 storage:
@@ -259,10 +300,8 @@ scheduler:
   retry:
     max_attempts: 4
     base_delay_seconds: 2
-
   rate_limit:
     respect_retry_after: true
-
   quota:
     warning_ratio: 0.30
     low_ratio: 0.10
@@ -274,52 +313,54 @@ server:
 providers:
   elsevier:
     enabled: true
-
+    download_pdf: false
     services:
       scopus_search:
         enabled: true
-
       article_retrieval:
         enabled: true
-
+      article_pdf:
+        enabled: true
     credentials:
       - name: university_primary
         secret_ref: file:elsevier:university_primary
-        institution: HIT
+        institution: YOUR_INSTITUTION
         quota_scope: institution
 ```
 
 ### Secret reference formats
 
+| Reference | Backend | Recommended |
+| --- | --- | --- |
+| `file:provider:name` | Project-local `0600` secret file | ✅ Default |
+| `keychain:service:account` | macOS Keychain / OS keyring | Optional |
+| `env:NAME` | Environment variable | CI/containers only |
+
+The legacy `api_key_env` field remains supported but is not the recommended local workflow.
+
+## Credentials & Quotas
+
+Quota state is tracked at **provider → service → credential** granularity and persisted in SQLite.
+
 ```text
-file:provider:name         recommended project-local 0600 secret file
-keychain:service:account   optional macOS Keychain / OS keyring
-env:NAME                   legacy CI/container compatibility
+Credential failover policy:
+  institution exhausted  → block other credentials in the same institution
+  account exhausted      → block rotation
+  provider exhausted     → block rotation
+  unknown scope          → conservative: block rotation
+  credential scope       → independently authorized failover allowed
 ```
 
-The legacy `api_key_env` field remains supported for existing deployments, but it is not the
-recommended local workflow.
+| HTTP | Behavior |
+| --- | --- |
+| `429` | Honor `Retry-After`, mark cooldown, defer as `waiting_for_quota` |
+| `500/502/503/504` | Bounded exponential backoff |
+| timeout / network | Bounded exponential backoff |
+| `401` | Mark credential unhealthy |
+| `403` | Mark service `degraded`; do **not** disable the credential |
+| `400/404` | Permanent failure; no endless retry |
 
-### Optional keychain mode
-
-To use the operating system keyring instead of the project file:
-
-```bash
-export LIT_HARVEST_SECRET_BACKEND=keychain
-.venv/bin/lit-harvest auth set elsevier university_primary \
-  --secret-ref keychain:lit-harvest.elsevier:university_primary
-```
-
-## Credential and Quota Policy
-
-Credential failover is intentionally conservative.
-
-- Institution-scoped quota exhaustion blocks other credentials in the same institution.
-- Account, provider, and unknown scopes also block credential rotation.
-- Only independently authorized credentials may fail over.
-- HTTP 429, timeouts, 500, 502, 503, and 504 retry with bounded backoff.
-- HTTP 400, 401, 403, and 404 are not endlessly retried.
-- The system never uses credential rotation to bypass provider or institutional quotas.
+> Credential rotation is never used to circumvent provider or institutional quotas.
 
 ## Storage Layout
 
@@ -337,14 +378,12 @@ data/
         └── state.json
 ```
 
-Project-local secrets are stored separately:
+Project-local secrets live separately and are Git-ignored:
 
 ```text
 .lit-harvest/
-└── secrets.json
+└── secrets.json       # mode 0600
 ```
-
-Raw publisher data is never discarded when parsing rules evolve.
 
 ## Local API
 
@@ -371,115 +410,117 @@ POST /api/failures/retry-transient
 POST /api/queue/pause
 POST /api/queue/resume
 
-GET  /api/events
+GET  /api/events          # Server-Sent Events
 ```
 
-## UI Pages
+## Web Dashboard
 
-```text
-/             Overview
-/papers       Papers and lifecycle state
-/papers/:id   Paper detail
-/providers    Provider, service, credential, and quota view
-/failures     Failure center and queue controls
-```
+| Route | English | 中文 |
+| --- | --- | --- |
+| `/` | Overview | 总览 |
+| `/papers` | Papers | 文献 |
+| `/papers/:id` | Paper detail | 文献详情 |
+| `/providers` | Providers & quotas | 提供商与配额 |
+| `/failures` | Failure center | 失败任务 |
 
-## Security and Portability
+The dashboard follows your browser language and can be switched at runtime with the **中文 / EN**
+control. All controls call the same backend service layer as the CLI.
 
-Check a repository before committing or publishing:
+## Security
 
 ```bash
 lit-harvest security scan
 ```
 
-The scanner checks visible/untracked and tracked files for likely API keys and private-key blocks,
-and fails if a protected path such as `.lit-harvest/`, `config.yaml`, `data/`, or `.env` is tracked
-by Git.
+Checks tracked and visible files for likely API keys and private-key blocks, and fails if a protected
+path (`.lit-harvest/`, `config.yaml`, `data/`, `.env`) is tracked by Git. Enforced in CI.
 
-Runtime paths are resolved relative to the active configuration file or the current working
-directory. There are no required absolute paths, and `LIT_HARVEST_CONFIG` may point to a
-configuration file outside the repository.
+See [SECURITY.md](SECURITY.md). Never open a public issue for an active credential leak — revoke the
+key first.
+
+## Portability
+
+All runtime paths resolve relative to the active config file or the current working directory:
+
+```text
+./data
+./data/lit_harvest.db
+./.lit-harvest/secrets.json
+```
+
+No absolute paths are required. Use `LIT_HARVEST_CONFIG` to point at an external config, or override
+locations in `config.yaml`:
+
+```yaml
+storage:
+  root: ~/lit-harvest-data
+database:
+  url: sqlite:///~/lit-harvest-data/lit_harvest.db
+```
 
 ## Development
 
-Run tests and static checks:
-
 ```bash
-.venv/bin/pytest
+.venv/bin/pytest                        # 59 tests
 .venv/bin/ruff check src/lit_harvest tests
 .venv/bin/mypy src/lit_harvest
 .venv/bin/lit-harvest security scan
 ```
 
-Rebuild the frontend after changing React or TypeScript code:
+Rebuild the bilingual frontend:
 
 ```bash
 ./scripts/build_frontend.sh
 ```
 
-The script uses the Codex-bundled Node runtime when `node` is not on `PATH`.
-
-## Open Source / GitHub
-
-The repository is ready for a private GitHub remote. Before the first push:
-
-```bash
-lit-harvest security scan
-git check-ignore -v .lit-harvest/secrets.json config.yaml data/lit_harvest.db .env
-git status --short
-```
-
-Then follow [docs/PUBLISHING.md](docs/PUBLISHING.md). The repository includes CI, `SECURITY.md`,
-`CONTRIBUTING.md`, and `CODE_OF_CONDUCT.md`.
+| Check | Status |
+| --- | --- |
+| Tests | 59 passing |
+| Lint | Ruff clean |
+| Types | mypy strict, 50 files |
+| Security | repository scan clean |
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Data model](docs/DATA_MODEL.md)
-- [Local API](docs/API.md)
-- [Operations](docs/OPERATIONS.md)
-- [简体中文 README](README-ZH.md)
+| Document | Contents |
+| --- | --- |
+| [Architecture](docs/ARCHITECTURE.md) | Layers, boundaries, data flow |
+| [Data Model](docs/DATA_MODEL.md) | Core entities and SQLite schema |
+| [Local API](docs/API.md) | Endpoints and UI routes |
+| [Operations](docs/OPERATIONS.md) | Credentials, quotas, resume, storage |
+| [Publishing](docs/PUBLISHING.md) | Private → public release checklist |
+| [简体中文 README](README-ZH.md) | 中文说明 |
 
-## Scope
+## Scope & Roadmap
 
-Implemented in v0.1:
+**Implemented in v0.1**
 
-- provider abstraction
-- credential metadata and project-local secrets
-- quota model and manager
-- scheduler and resumable job queue
-- SQLite operational state
-- raw document storage
-- DOI import
-- Scopus Search STANDARD
-- ScienceDirect FULL XML retrieval
-- Optional publisher PDF download, preserved as a separate raw attachment
-- deterministic Elsevier FULL XML normalization
-- CLI
-- FastAPI backend
-- React dashboard
-- SSE updates
-- pause, resume, retry, and cancel controls
+- Provider abstraction · credential manager · quota manager
+- Persistent scheduler · SQLite state · raw storage · DOI import
+- Scopus Search `STANDARD` · ScienceDirect `FULL` XML · optional PDF attachment
+- Deterministic FULL XML normalization
+- Typer CLI · FastAPI · bilingual React dashboard · SSE
+- Pause / resume / retry / cancel · secret-leak scanner · CI
 
-Deliberately excluded from v0.1:
+**Planned**
 
-- LLM extraction
-- materials NER
-- experimental relation extraction
-- knowledge graphs
-- Neo4j
-- vector databases
-- research-gap engine
-- hypothesis generation
-- PDF OCR
-- browser scraping
-- cloud deployment
-- SaaS
-- user login
-- secret editing in the UI
-- unrestricted key rotation
-- broad multi-publisher integration
+| Version | Focus |
+| --- | --- |
+| `v0.2` | OpenAlex, Crossref, Unpaywall enrichment |
+| `v0.3` | Springer Nature, Wiley, ACS, RSC (after official API/entitlement review) |
+| `v0.4+` | Scientific extraction → knowledge graph → landscape analysis |
+
+**Explicitly out of scope for v0.1**
+
+LLM extraction · materials NER · relation extraction · knowledge graphs · Neo4j · vector databases ·
+research-gap engine · hypothesis generation · PDF OCR · browser scraping · cloud deployment · SaaS ·
+login · UI secret editing · unrestricted key rotation · broad multi-publisher integration.
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Please run the full check suite before opening a PR.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2026 Literature Harvester contributors
