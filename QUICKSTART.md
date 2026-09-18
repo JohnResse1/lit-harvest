@@ -202,7 +202,7 @@ doi:10.1016/j.xxx
 DOI: 10.1016/j.xxx
 ```
 
-### 3. Search by topic
+### 3. Search by topic, then choose what to download
 
 In the **Search Scopus** box, enter a query and click **Run search**:
 
@@ -211,6 +211,21 @@ TITLE-ABS-KEY("solid-state battery")
 ```
 
 Set **Max results** to limit how many papers are retrieved (start with 10 while testing).
+
+**Searching does not download anything.** A results table appears below with a checkbox on every
+row. You decide what to keep:
+
+| Control | Effect |
+| --- | --- |
+| **Choose which metadata columns to show** | Add or remove columns (authors, citations, ISSN, volume, affiliation, …) |
+| Row checkboxes | Tick the papers you actually want |
+| Header checkbox | Select or clear everything at once |
+| **Selected: n / total** | Shows how many you picked |
+| **Download selected** | Downloads only the ticked papers |
+
+Metadata you can display: title (always shown), DOI (always shown), journal, year, authors,
+affiliation, document type, citations, open access, ISSN, volume, issue, pages, cover date,
+Scopus ID, and EID. Anything you switch off stays out of the table.
 
 ### 4. Download your articles
 
@@ -360,7 +375,8 @@ lit-harvest ui                       open the web dashboard
 lit-harvest fetch DOI                download one article
 lit-harvest fetch DOI --pdf          download one article + PDF
 lit-harvest fetch file.csv           download many articles
-lit-harvest search --query "..." --max-results 20
+lit-harvest search --query "..." --max-results 20   preview only, no download
+lit-harvest fetch-session SESSION_ID                  download a previewed search
 lit-harvest parse                    re-process downloaded files
 lit-harvest export papers.csv        export your list
 
@@ -593,7 +609,7 @@ doi:10.1016/j.xxx
 DOI: 10.1016/j.xxx
 ```
 
-### 3. 按主题检索
+### 3. 按主题检索，然后自己挑选要下载哪些
 
 在「**检索 Scopus**」框中输入检索式，点击「**开始检索**」：
 
@@ -602,6 +618,19 @@ TITLE-ABS-KEY("solid-state battery")
 ```
 
 用「**最大结果数**」限制数量（测试时先设 10 比较稳妥）。
+
+**检索不会下载任何东西。** 下方会出现一个结果表格，每行都有勾选框，由你决定要哪些：
+
+| 控件 | 作用 |
+| --- | --- |
+| **选择要显示的元数据列** | 增删显示的列（作者、引用数、ISSN、卷、机构……） |
+| 每行勾选框 | 勾选你真正想要的文献 |
+| 表头勾选框 | 全选或全不选 |
+| **已选择：n / 总数** | 显示已选数量 |
+| **下载选中项** | 只下载勾选的文献 |
+
+可显示的元数据：标题（始终显示）、DOI（始终显示）、期刊、年份、作者、机构、文献类型、引用数、
+开放获取、ISSN、卷、期、页码、出版日期、Scopus ID、EID。关掉的列不会出现在表格里。
 
 ### 4. 下载你的文章
 
@@ -745,7 +774,8 @@ lit-harvest ui                       打开网页面板
 lit-harvest fetch DOI                下载一篇文章
 lit-harvest fetch DOI --pdf          下载一篇文章 + PDF
 lit-harvest fetch file.csv           批量下载
-lit-harvest search --query "..." --max-results 20
+lit-harvest search --query "..." --max-results 20   仅预览，不下载
+lit-harvest fetch-session SESSION_ID                  下载某次预览的检索结果
 lit-harvest parse                    重新处理已下载文件
 lit-harvest export papers.csv        导出清单
 

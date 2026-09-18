@@ -203,13 +203,23 @@ providers:
 
 ## 常用流程
 
-### 按主题检索
+### 按主题检索（下载前先预览）
+
+检索**只会预览**结果，不会自动下载全文。你会得到一个候选表格和 session id：
 
 ```bash
 .venv/bin/lit-harvest search \
   --query 'TITLE-ABS-KEY("solid-state battery")' \
-  --max-results 100
+  --max-results 20
 ```
+
+然后可以下载该次检索的全部结果：
+
+```bash
+.venv/bin/lit-harvest fetch-session SESSION_ID
+```
+
+或者在网页面板中逐条勾选——每行都有勾选框，显示哪些元数据列也可以自行配置。
 
 ### 获取单个 DOI
 
@@ -351,7 +361,9 @@ lit-harvest auth test   [provider] [name] [--config PATH]
 lit-harvest auth remove [provider] [name] [--secret-ref REF] [--config PATH]
 
 lit-harvest search --query QUERY --max-results N
-                   [--start-year N] [--end-year N] [--export PATH] [--config PATH]
+                   [--start-year N] [--end-year N] [--export PATH]
+                   [--download-session SESSION_ID] [--config PATH]
+lit-harvest fetch-session SESSION_ID [--pdf] [--config PATH]
 
 lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--pdf|--no-pdf] [--config PATH]
 lit-harvest parse [--limit N] [--force] [--config PATH]

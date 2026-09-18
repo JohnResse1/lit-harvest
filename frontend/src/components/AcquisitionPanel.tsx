@@ -1,8 +1,14 @@
 import { useRef, useState } from "react";
-import { api, type ImportOutcome } from "../lib/api";
+import { api, type ImportOutcome, type SearchOutcome } from "../lib/api";
 import { useLanguage } from "../lib/LanguageContext";
 
-export function AcquisitionPanel({ onChanged }: { onChanged: () => void }) {
+export function AcquisitionPanel({
+  onChanged,
+  onSearchFinished,
+}: {
+  onChanged: () => void;
+  onSearchFinished?: (outcome: SearchOutcome) => void;
+}) {
   const { t } = useLanguage();
   const [doi, setDoi] = useState("");
   const [query, setQuery] = useState('TITLE-ABS-KEY("solid-state battery")');
@@ -154,7 +160,12 @@ export function AcquisitionPanel({ onChanged }: { onChanged: () => void }) {
           <button
             className="button primary"
             disabled={busy || query.trim().length === 0}
-            onClick={() => run(() => api.search(query.trim(), maxResults), t("searchDone"))}
+            onClick={() =>
+              run(async () => {
+                const outcome = await api.search(query.trim(), maxResults);
+                onSearchFinished?.(outcome);
+              }, t("searchPreviewReady"))
+            }
           >
             {t("runSearch")}
           </button>

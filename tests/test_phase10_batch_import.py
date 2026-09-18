@@ -190,3 +190,70 @@ def test_minimal_csv_requires_header() -> None:
     without_header.write_text("10.1000/x\n", encoding="utf-8")
     with pytest.raises(ValueError, match="not found"):
         load_dois(without_header)
+
+
+def test_doi_endpoint_returns_clean_error_for_missing_article(tmp_path: Path, monkeypatch) -> None:
+    """Provider payloads must never leak to the browser as raw XML."""
+    from lit_harvest.providers.base import NotFoundError
+
+    client = client_for(tmp_path)
+    container = client.app.state.container
+
+    class NotFoundProvider:
+        name = "elsevier"
+        display_name = "Elsevier"
+
+        def fetch_fulltext(self, doi: str):
+            raise NotFoundError(
+                "<service-error><status><statusCode>RESOURCE_NOT_FOUND</statusCode>"
+                "</status></service-error>",
+                status_code=404,
+            )
+
+        def search(self, *args, **kwargs):
+            return []
+
+        def healthcheck(self, *args, **kwargs):
+            return []
+
+    container.providers.register(NotFoundProvider())
+    container.acquisition.providers = container.providers
+
+    response = client.post(
+        "/api/papers/doi",
+        json={"doi": "10.1016/j.solidstatesciences.2019.105969", "download_pdf": False},
+    )
+    assert response.status_code == 404
+    body = response.text
+    assert "service-error" not in body
+    assert "RESOURCE_NOT_FOUND" not in body
+    detail = response.json()["detail"]
+    assert detail["code"] == "not_found"
+    assert "could not find this DOI" in detail["message"]
+
+
+def test_doi_endpoint_maps_entitlement_to_403(tmp_path: Path) -> None:
+    from lit_harvest.providers.base import EntitlementError
+
+    client = client_for(tmp_path)
+    container = client.app.state.container
+
+    class BlockedProvider:
+        name = "elsevier"
+        display_name = "Elsevier"
+
+        def fetch_fulltext(self, doi: str):
+            raise EntitlementError("not entitled", status_code=403)
+
+        def search(self, *args, **kwargs):
+            return []
+
+        def healthcheck(self, *args, **kwargs):
+            return []
+
+    container.providers.register(BlockedProvider())
+    container.acquisition.providers = container.providers
+
+    response = client.post("/api/papers/doi", json={"doi": "10.1000/blocked"})
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "not_entitled"

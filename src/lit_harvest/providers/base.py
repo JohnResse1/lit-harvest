@@ -43,6 +43,28 @@ class NotFoundError(ProviderError):
     code = "not_found"
 
 
+def user_message(error: ProviderError) -> str:
+    """Short, human-readable text that never includes a raw provider payload."""
+    if error.code == "not_found":
+        return (
+            "Elsevier could not find this DOI. Check the DOI and that the article is "
+            "available in ScienceDirect."
+        )
+    if error.code == "authentication_error":
+        return "Elsevier rejected the API key. Store a valid key with `lit-harvest auth set`."
+    if error.code == "not_entitled":
+        return (
+            "Your account is not entitled to this article. The API key works, but your "
+            "institution or account cannot access this content."
+        )
+    if error.code == "rate_limit":
+        return "The publisher rate limit was reached. The request will be retried later."
+    message = (error.message or "").strip()
+    if message.startswith("<") or len(message) > 300:
+        return "The publisher request failed."
+    return message or "The publisher request failed."
+
+
 class RateLimitError(ProviderError):
     code = "rate_limit"
     retryable = True

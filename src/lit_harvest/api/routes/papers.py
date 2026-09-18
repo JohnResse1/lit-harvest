@@ -13,6 +13,48 @@ from pydantic import BaseModel
 
 from lit_harvest.api.dependencies import ContainerDep
 from lit_harvest.models import JobCreate, JobStatus, PaperStage, TaskType
+from lit_harvest.providers.base import (
+    AuthenticationError,
+    EntitlementError,
+    NotFoundError,
+    ProviderError,
+    user_message,
+)
+
+
+def _provider_error_response(exc: Exception) -> HTTPException:
+    """Translate provider failures into an actionable HTTP response.
+
+    Raw provider payloads (which may contain XML service errors) are never
+    forwarded to the browser; users get a short code plus a readable message.
+    """
+    if isinstance(exc, NotFoundError):
+        return HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": user_message(exc)},
+        )
+    if isinstance(exc, AuthenticationError):
+        return HTTPException(
+            status_code=401,
+            detail={"code": "authentication_error", "message": user_message(exc)},
+        )
+    if isinstance(exc, EntitlementError):
+        return HTTPException(
+            status_code=403,
+            detail={"code": "not_entitled", "message": user_message(exc)},
+        )
+    if isinstance(exc, ProviderError):
+        return HTTPException(
+            status_code=502,
+            detail={"code": getattr(exc, "code", "provider_error"), "message": user_message(exc)},
+        )
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=422, detail={"code": "invalid_input", "message": str(exc)})
+    return HTTPException(
+        status_code=500,
+        detail={"code": "internal_error", "message": "Something went wrong while fetching."},
+    )
+
 
 router = APIRouter(prefix="/papers", tags=["papers"])
 
@@ -153,11 +195,8 @@ def queue_doi(
             )
             fetched = container.acquisition.fetch_job(job)
             container.database.update_job_status(job.id, JobStatus.SUCCESS)
-        except Exception as exc:  # noqa: BLE001 - surfaced to the caller
-            raise HTTPException(
-                status_code=502,
-                detail={"code": getattr(exc, "code", "fetch_failed"), "message": str(exc)},
-            ) from exc
+        except Exception as exc:  # noqa: BLE001 - translated into a clean response
+            raise _provider_error_response(exc) from exc
         payload["fetch"] = {
             "raw_path": fetched.raw_path,
             "normalized_path": fetched.normalized_path,
@@ -167,10 +206,12 @@ def queue_doi(
         try:
             payload["pdf"] = container.acquisition.fetch_pdf(paper_id)
         except Exception as exc:  # noqa: BLE001 - XML success remains valid
-            payload["pdf_error"] = {
-                "code": getattr(exc, "code", "pdf_failed"),
-                "message": str(exc),
-            }
+            translated = _provider_error_response(exc)
+            detail = translated.detail
+            if isinstance(detail, dict):
+                payload["pdf_error"] = detail
+            else:
+                payload["pdf_error"] = {"code": "pdf_failed", "message": str(detail)}
     return payload
 
 

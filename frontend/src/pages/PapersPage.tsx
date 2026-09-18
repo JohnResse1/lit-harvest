@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AcquisitionPanel } from "../components/AcquisitionPanel";
-import { api } from "../lib/api";
+import { SearchResults } from "../components/SearchResults";
+import { api, type SearchOutcome } from "../lib/api";
 import { useLanguage } from "../lib/LanguageContext";
 import type { Paper } from "../types/api";
 import { StatusBadge } from "../components/StatusBadge";
@@ -13,6 +14,7 @@ export function PapersPage() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [includePdf, setIncludePdf] = useState(true);
+  const [searchOutcome, setSearchOutcome] = useState<SearchOutcome | null>(null);
 
   const refresh = () => {
     api.papers().then(setPapers).catch((reason: Error) => setError(reason.message));
@@ -43,7 +45,10 @@ export function PapersPage() {
         <div><p className="eyebrow">{t("literatureLifecycle")}</p><h1>{t("navPapers")}</h1></div>
         <input className="search-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("filterPlaceholder")} />
       </div>
-      <AcquisitionPanel onChanged={refresh} />
+      <AcquisitionPanel onChanged={refresh} onSearchFinished={setSearchOutcome} />
+      {searchOutcome ? (
+        <SearchResults outcome={searchOutcome} onDownloaded={refresh} />
+      ) : null}
       <div className="toolbar">
         <label className="checkbox">
           <input type="checkbox" checked={includePdf} onChange={(event) => setIncludePdf(event.target.checked)} />

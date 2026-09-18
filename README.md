@@ -207,13 +207,25 @@ providers:
 
 ## Common Workflows
 
-### Search by topic
+### Search by topic (review before downloading)
+
+Searching only **previews** results; it never downloads full text by itself. You get a table of
+candidates plus a session id:
 
 ```bash
 .venv/bin/lit-harvest search \
   --query 'TITLE-ABS-KEY("solid-state battery")' \
-  --max-results 100
+  --max-results 20
 ```
+
+Then either download everything from that session:
+
+```bash
+.venv/bin/lit-harvest fetch-session SESSION_ID
+```
+
+…or choose individual papers in the dashboard, where every row has a checkbox and the metadata
+columns are configurable.
 
 ### Fetch one DOI
 
@@ -358,7 +370,9 @@ lit-harvest auth test   [provider] [name] [--config PATH]
 lit-harvest auth remove [provider] [name] [--secret-ref REF] [--config PATH]
 
 lit-harvest search --query QUERY --max-results N
-                   [--start-year N] [--end-year N] [--export PATH] [--config PATH]
+                   [--start-year N] [--end-year N] [--export PATH]
+                   [--download-session SESSION_ID] [--config PATH]
+lit-harvest fetch-session SESSION_ID [--pdf] [--config PATH]
 
 lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--pdf|--no-pdf] [--config PATH]
 lit-harvest parse [--limit N] [--force] [--config PATH]

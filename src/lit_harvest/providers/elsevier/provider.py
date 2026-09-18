@@ -116,7 +116,7 @@ class ElsevierProvider:
         if max_results < 1:
             raise ValueError("max_results must be >= 1")
         pages: list[SearchPage] = []
-        cursor: str | None = "*"
+        cursor: str | None = None
         retrieved = 0
         total: int | None = None
         exhausted_credentials: set[str] = set()
@@ -127,8 +127,12 @@ class ElsevierProvider:
                 "query": query,
                 "view": "STANDARD",
                 "count": count,
-                "cursor": cursor or "*",
             }
+            # The cursor parameter requires extra Elsevier entitlements, and
+            # `cursor=*` is identical to omitting it (it means "first page").
+            # Only send a real cursor when we actually have one.
+            if cursor:
+                params["cursor"] = cursor
             if start_year is not None:
                 params["date"] = f"{start_year}-{end_year or datetime.now(UTC).year}"
             credential: Credential | None = None
@@ -190,6 +194,8 @@ class ElsevierProvider:
             retrieved += len(papers)
             if not papers or not next_cursor or next_cursor == cursor:
                 break
+            # Cursor pagination needs entitlements; if they are missing the
+            # provider returns 403 and we stop cleanly after the first page.
             cursor = next_cursor
         return pages
 

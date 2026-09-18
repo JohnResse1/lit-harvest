@@ -424,11 +424,32 @@ def search(
     export: Annotated[
         str | None, typer.Option("--export", help="Optional CSV/JSON/JSONL export path.")
     ] = None,
+    download_session: Annotated[
+        str | None,
+        typer.Option(
+            "--download-session",
+            help="Download every candidate of an earlier session id, then exit.",
+        ),
+    ] = None,
     config: Annotated[str | None, typer.Option("--config")] = None,
 ) -> None:
-    """Discover papers with Scopus Search STANDARD and store them locally."""
+    """Search Scopus and preview the results (nothing is downloaded yet)."""
+    if download_session:
+        container = _container(config)
+        try:
+            session = container.acquisition.search_sessions.get(download_session)
+            container.acquisition.search_sessions.update_selection(
+                download_session, [item.candidate_id for item in session.candidates]
+            )
+            download_result = container.acquisition.fetch_selected(download_session)
+        except Exception as exc:  # noqa: BLE001
+            _explain(exc)
+            return
+        _print_json(download_result)
+        return
+    container = _container(config)
     try:
-        result = _container(config).acquisition.search(
+        result = container.acquisition.search(
             query,
             max_results=max_results,
             start_year=start_year,
@@ -438,16 +459,60 @@ def search(
     except Exception as exc:  # noqa: BLE001 - translated into user guidance
         _explain(exc)
         return
-    _print_json(
-        {
-            "query": result.query,
-            "discovered": result.discovered,
-            "stored": result.stored,
-            "pages": result.pages,
-            "total_results": result.total_results,
-            "raw_paths": result.raw_paths,
-        }
+    review = (
+        container.acquisition.search_sessions.get(result.session_id) if result.session_id else None
     )
+    table = Table(title=f"Search results for: {result.query}")
+    table.add_column("#", justify="right")
+    table.add_column("Title")
+    table.add_column("Journal")
+    table.add_column("Year")
+    table.add_column("DOI")
+    table.add_column("Open Access")
+    if review:
+        for index, candidate in enumerate(review.candidates, start=1):
+            table.add_row(
+                str(index),
+                (candidate.title or "(untitled)")[:60],
+                (candidate.journal or "-")[:28],
+                str(candidate.year or "-"),
+                candidate.doi or "-",
+                "yes" if candidate.open_access else "-",
+            )
+    console.print(table)
+    console.print()
+    console.print(
+        f"Found {result.discovered} candidate(s); {result.total_results or result.discovered} "
+        "matched in total."
+    )
+    console.print(
+        "[yellow]Nothing has been downloaded yet.[/yellow] Choose what to download in the "
+        "dashboard (Papers page), or select everything with:"
+    )
+    if result.session_id:
+        console.print(f"  lit-harvest search --download-session {result.session_id}")
+    if export:
+        console.print(f"Exported the registry to {export}")
+
+
+@app.command("fetch-session")
+def fetch_session(
+    session_id: Annotated[str, typer.Argument(help="Session id printed by `lit-harvest search`.")],
+    pdf: Annotated[bool, typer.Option("--pdf/--no-pdf")] = False,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Download every candidate from a previewed search session."""
+    container = _container(config)
+    try:
+        session = container.acquisition.search_sessions.get(session_id)
+        container.acquisition.search_sessions.update_selection(
+            session_id, [item.candidate_id for item in session.candidates]
+        )
+        result = container.acquisition.fetch_selected(session_id, download_pdf=pdf)
+    except Exception as exc:  # noqa: BLE001 - translated into guidance
+        _explain(exc)
+        return
+    _print_json(result)
 
 
 @app.command()

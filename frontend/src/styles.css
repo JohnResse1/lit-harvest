@@ -200,3 +200,11 @@ input[type="file"] {
 .small-mono { font-size: .78rem; }
 .hint { color: #77869e; font-size: .85rem; margin: 8px 0 12px; }
 .card .actions { margin-top: 12px; }
+
+.column-picker { margin-bottom: 12px; }
+.column-picker summary { cursor: pointer; color: #3469dd; font-size: .85rem; font-weight: 600; }
+.column-list { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0 4px; }
+.column-list .checkbox { font-size: .82rem; }
+th.narrow, td.narrow { width: 40px; text-align: center; }
+.selection-actions { justify-content: flex-end; margin-top: 14px; }
+.selection-count { margin-right: auto; color: #62718b; font-size: .85rem; }

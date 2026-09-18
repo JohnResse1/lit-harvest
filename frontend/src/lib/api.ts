@@ -1,13 +1,33 @@
 import type { Failure, Job, Overview, Paper, PaperDetail, Provider, Quota } from "../types/api";
 
+/** Turn an API error body into a short, human-readable sentence. */
+function extractErrorMessage(raw: string, status: number): string {
+  if (raw) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && "detail" in parsed) {
+        const detail = (parsed as { detail: unknown }).detail;
+        if (typeof detail === "string") return detail;
+        if (detail && typeof detail === "object" && "message" in detail) {
+          const message = (detail as { message: unknown }).message;
+          if (typeof message === "string") return message;
+        }
+      }
+    } catch {
+      // Not JSON; fall through to a generic message below.
+    }
+  }
+  return `Request failed (HTTP ${status}).`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
     ...init,
   });
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Request failed: ${response.status}`);
+    const raw = await response.text();
+    throw new Error(extractErrorMessage(raw, response.status));
   }
   return (await response.json()) as T;
 }
@@ -30,13 +50,44 @@ export interface ImportOutcome {
   pdf_failed?: number;
 }
 
+export interface SearchCandidate {
+  candidate_id: string;
+  paper_id: string | null;
+  doi: string | null;
+  title: string | null;
+  journal: string | null;
+  year: number | null;
+  authors: string | null;
+  affiliation: string | null;
+  document_type: string | null;
+  citation_count: number | null;
+  open_access: boolean | null;
+  free_to_read: string | null;
+  issn: string | null;
+  volume: string | null;
+  issue: string | null;
+  pages: string | null;
+  cover_date: string | null;
+  scopus_id: string | null;
+  eid: string | null;
+  scopus_url: string | null;
+  selected: boolean;
+}
+
 export interface SearchOutcome {
   query: string;
   discovered: number;
   stored: number;
   pages: number;
   total_results: number | null;
+  session_id: string | null;
+  candidates: SearchCandidate[];
 }
+
+export type MetadataColumn =
+  | "journal" | "year" | "authors" | "affiliation" | "document_type"
+  | "citation_count" | "open_access" | "issn" | "volume" | "issue"
+  | "pages" | "cover_date" | "scopus_id" | "eid";
 
 export interface StorageInfo {
   root: string;
@@ -91,6 +142,19 @@ export const api = {
         end_year: endYear || null,
       }),
     }),
+  selectCandidates: (sessionId: string, candidateIds: string[]) =>
+    request<{ session_id: string; selected_count: number }>(
+      `/api/search/sessions/${sessionId}/select`,
+      { method: "POST", body: JSON.stringify({ candidate_ids: candidateIds }) },
+    ),
+  downloadSelected: (sessionId: string, candidateIds: string[], downloadPdf: boolean) =>
+    request<{ requested: number; succeeded: number; failed: number }>(
+      `/api/search/sessions/${sessionId}/download`,
+      {
+        method: "POST",
+        body: JSON.stringify({ candidate_ids: candidateIds, download_pdf: downloadPdf }),
+      },
+    ),
   addDoi: (doi: string, downloadPdf = false) =>
     request<Record<string, unknown>>("/api/papers/doi", {
       method: "POST",
@@ -126,7 +190,9 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paper_ids: paperIds, include_pdf: includePdf, include_normalized: true }),
     });
-    if (!response.ok) throw new Error(await response.text());
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(await response.text(), response.status));
+    }
     return response.blob();
   },
   pause: (reason?: string) =>

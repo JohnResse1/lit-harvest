@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,10 +23,23 @@ from lit_harvest.models import (
 from lit_harvest.providers.base import FullTextResult
 from lit_harvest.providers.registry import ProviderRegistry
 from lit_harvest.services.normalization import NormalizationService
+from lit_harvest.services.search_sessions import SearchCandidate, SearchSessionStore
 from lit_harvest.storage.database import Database
 from lit_harvest.storage.files import DocumentStorage, sha256_bytes
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_error_message(exc: Exception) -> str:
+    """Never surface raw provider payloads in results shown to users."""
+    from lit_harvest.providers.base import ProviderError, user_message
+
+    if isinstance(exc, ProviderError):
+        return user_message(exc)
+    message = str(exc)
+    if message.startswith("<") or len(message) > 300:
+        return "The request failed."
+    return message
 
 
 @dataclass(slots=True)
@@ -36,6 +50,7 @@ class SearchResult:
     pages: int
     total_results: int | None
     raw_paths: list[str]
+    session_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -74,6 +89,7 @@ class AcquisitionService:
         self.storage = storage
         self.providers = providers
         self.normalization = normalization
+        self.search_sessions = SearchSessionStore(database)
 
     def search(
         self,
@@ -95,6 +111,7 @@ class AcquisitionService:
         stored = 0
         raw_paths: list[str] = []
         total_results = None
+        candidates: list[SearchCandidate] = []
         for index, page in enumerate(pages, start=1):
             raw_path = self.storage.write_raw(
                 f"search/{datetime.now(UTC).strftime('%Y%m%d')}",
@@ -105,12 +122,23 @@ class AcquisitionService:
             total_results = page.total_results if page.total_results is not None else total_results
             for item in page.papers:
                 discovered += 1
-                if self.database.upsert_paper(item):
+                paper = self.database.upsert_paper(item)
+                if paper is not None:
                     stored += 1
+                candidates.append(
+                    self._candidate_from_paper(item, paper_id=paper.id if paper else None)
+                )
         if export:
             from lit_harvest.services.papers import PaperService
 
             PaperService(self.database).export(export)
+        session = self.search_sessions.create(
+            query=query,
+            max_results=max_results,
+            total_results=total_results,
+            raw_paths=raw_paths,
+            candidates=candidates,
+        )
         return SearchResult(
             query=query,
             discovered=discovered,
@@ -118,7 +146,134 @@ class AcquisitionService:
             pages=len(pages),
             total_results=total_results,
             raw_paths=raw_paths,
+            session_id=session.session_id,
         )
+
+    @staticmethod
+    def _candidate_from_paper(paper: PaperCreate, *, paper_id: str | None) -> SearchCandidate:
+        extra = paper.extra or {}
+        authors = None
+        author_field = extra.get("author")
+        if isinstance(author_field, dict):
+            names = author_field.get("author")
+            if isinstance(names, list):
+                authors = (
+                    "; ".join(
+                        str(item.get("authname"))
+                        for item in names
+                        if isinstance(item, dict) and item.get("authname")
+                    )
+                    or None
+                )
+        elif isinstance(author_field, list):
+            authors = "; ".join(str(item) for item in author_field) or None
+
+        affiliation = extra.get("affiliation_text")
+        if not affiliation:
+            raw_affiliation = extra.get("affiliation")
+            if isinstance(raw_affiliation, list):
+                affiliation = (
+                    "; ".join(
+                        str(item.get("affilname"))
+                        for item in raw_affiliation
+                        if isinstance(item, dict) and item.get("affilname")
+                    )
+                    or None
+                )
+
+        open_access: bool | None = None
+        raw_oa = extra.get("openaccessFlag")
+        if raw_oa is None:
+            raw_oa = extra.get("openaccess")
+        if raw_oa is not None:
+            open_access = str(raw_oa).lower() in {"1", "true", "yes"}
+
+        free_to_read = None
+        raw_free = extra.get("freetoreadLabel")
+        if isinstance(raw_free, dict):
+            values = raw_free.get("value")
+            if isinstance(values, list):
+                free_to_read = (
+                    "; ".join(
+                        str(item.get("$"))
+                        for item in values
+                        if isinstance(item, dict) and item.get("$")
+                    )
+                    or None
+                )
+        elif isinstance(raw_free, str):
+            free_to_read = raw_free
+
+        citation_count = extra.get("citation_count")
+        return SearchCandidate(
+            candidate_id=uuid.uuid4().hex,
+            paper_id=paper_id,
+            doi=paper.doi,
+            title=paper.title,
+            journal=paper.journal,
+            year=paper.publication_year,
+            authors=authors,
+            affiliation=affiliation,
+            document_type=paper.document_type,
+            citation_count=int(citation_count) if isinstance(citation_count, int) else None,
+            open_access=open_access,
+            free_to_read=free_to_read,
+            issn=str(extra.get("prism:issn") or "") or None,
+            volume=str(extra.get("prism:volume") or "") or None,
+            issue=str(extra.get("prism:issueIdentifier") or "") or None,
+            pages=str(extra.get("prism:pageRange") or "") or None,
+            cover_date=str(extra.get("prism:coverDate") or "") or None,
+            scopus_id=paper.identifiers.scopus_id,
+            eid=paper.identifiers.eid,
+            scopus_url=str(extra.get("prism:url") or "") or None,
+        )
+
+    def fetch_selected(self, session_id: str, *, download_pdf: bool = False) -> dict[str, Any]:
+        """Download only the candidates the user ticked, then return a summary."""
+        selected = self.search_sessions.selected(session_id)
+        if not selected:
+            raise ValueError("No papers were selected.")
+        results: list[dict[str, Any]] = []
+        succeeded = 0
+        failed = 0
+        for candidate in selected:
+            doi = candidate.doi
+            if not doi:
+                failed += 1
+                results.append({"doi": None, "status": "skipped", "reason": "no DOI"})
+                continue
+            try:
+                fetched = self.fetch_now(doi)
+                entry: dict[str, Any] = {
+                    "doi": doi,
+                    "status": "ok",
+                    "paper_id": fetched.paper_id,
+                    "reused": fetched.reused,
+                }
+                if download_pdf:
+                    try:
+                        entry["pdf"] = self.fetch_pdf(fetched.paper_id)
+                    except Exception as exc:  # noqa: BLE001 - XML success stands
+                        entry["pdf_error"] = getattr(exc, "code", "pdf_failed")
+                succeeded += 1
+                results.append(entry)
+            except Exception as exc:  # noqa: BLE001 - per-paper isolation
+                failed += 1
+                results.append(
+                    {
+                        "doi": doi,
+                        "status": "failed",
+                        "error": getattr(exc, "code", "fetch_failed"),
+                        "message": _clean_error_message(exc),
+                    }
+                )
+        return {
+            "session_id": session_id,
+            "requested": len(selected),
+            "succeeded": succeeded,
+            "failed": failed,
+            "results": results,
+        }
 
     def import_dois(self, path: str | Path, *, doi_column: str = "doi") -> ImportResult:
         loaded = load_dois(path, doi_column=doi_column)

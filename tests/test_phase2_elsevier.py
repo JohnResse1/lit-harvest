@@ -359,3 +359,38 @@ def test_fetch_pdf_rejects_non_pdf_response(
     )
     with pytest.raises(ProviderError, match="did not return a PDF"):
         provider.fetch_pdf("10.1016/x")
+
+
+def test_first_search_page_omits_cursor_parameter(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Elsevier restricts the cursor parameter; page one must not send it."""
+    monkeypatch.setenv("ELSEVIER_KEY_PRIMARY", "secret")
+    creds = CredentialManager(config(), database)
+    creds.sync_configured_credentials()
+    seen_params: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.append(dict(request.url.params))
+        return httpx.Response(
+            200,
+            json={
+                "search-results": {
+                    "opensearch:totalResults": "1",
+                    "opensearch:itemsPerPage": "1",
+                    "entry": [{"prism:doi": "10.1000/cursor-test", "dc:title": "T"}],
+                }
+            },
+            headers={"Content-Type": "application/json"},
+        )
+
+    provider = ElsevierProvider(
+        database=database,
+        credentials=creds,
+        quotas=QuotaManager(database),
+        client=ElsevierClient(transport=httpx.MockTransport(handler)),
+    )
+    provider.search("TITLE-ABS-KEY(x)", max_results=1)
+    assert seen_params, "no request was made"
+    assert "cursor" not in seen_params[0], "first page must omit the restricted cursor parameter"
+    assert "cursor" not in seen_params[0], "cursor=* is equivalent and also restricted"

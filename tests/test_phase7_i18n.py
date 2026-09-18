@@ -23,3 +23,12 @@ def test_built_frontend_is_bilingual_capable() -> None:
     bundle = next((static / "assets").glob("*.js")).read_text(encoding="utf-8")
     assert "总览" in bundle
     assert "Overview" in bundle
+
+
+def test_frontend_parses_structured_api_errors() -> None:
+    source = (Path(__file__).parents[1] / "frontend" / "src" / "lib" / "api.ts").read_text(
+        encoding="utf-8"
+    )
+    assert "extractErrorMessage" in source
+    # Raw response text must not be surfaced verbatim to users.
+    assert "throw new Error(detail ||" not in source
