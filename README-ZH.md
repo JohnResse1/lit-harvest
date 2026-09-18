@@ -21,7 +21,7 @@
 [![CI](https://github.com/JohnResse1/lit-harvest/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnResse1/lit-harvest/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-59%20passing-2ea44f.svg)](tests)
+[![Tests](https://img.shields.io/badge/tests-114%20passing-2ea44f.svg)](tests)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![mypy: strict](https://img.shields.io/badge/mypy-strict-1674c1.svg)](https://mypy-lang.org/)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](pyproject.toml)
@@ -530,9 +530,19 @@ GET  /api/papers/export
 GET  /api/papers/{paper_id}
 GET  /api/papers/{paper_id}/download/xml|pdf|normalized
 POST /api/papers/download/zip
+GET  /api/papers/import/sample.csv
 
 POST /api/search
 GET  /api/search
+GET  /api/search/sessions
+GET  /api/search/sessions/{session_id}
+POST /api/search/sessions/{session_id}/select
+POST /api/search/sessions/{session_id}/download
+
+GET  /api/settings/storage
+GET  /api/settings/storage/validate
+POST /api/settings/storage
+POST /api/settings/storage/reset
 
 GET  /api/worker
 POST /api/worker/tick
@@ -636,7 +646,7 @@ database:
 ## 开发
 
 ```bash
-.venv/bin/pytest                        # 59 个测试
+.venv/bin/pytest                        # 114 个测试
 .venv/bin/ruff check src/lit_harvest tests
 .venv/bin/mypy src/lit_harvest
 .venv/bin/lit-harvest security scan
@@ -650,7 +660,7 @@ database:
 
 | 检查项 | 状态 |
 | --- | --- |
-| 测试 | 59 个通过 |
+| 测试 | 114 个通过 |
 | Lint | Ruff 通过 |
 | 类型 | mypy strict，50 个文件 |
 | 安全 | 仓库扫描通过 |
