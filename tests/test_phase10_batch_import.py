@@ -147,3 +147,46 @@ def test_sample_files_ship_with_package() -> None:
     txt = root / "dois.sample.txt"
     assert csv.exists() and txt.exists()
     assert "doi" in csv.read_text(encoding="utf-8").splitlines()[0].lower()
+
+
+def test_sample_csv_endpoint_returns_csv_not_html(tmp_path: Path) -> None:
+    client = client_for(tmp_path)
+    response = client.get("/api/papers/import/sample.csv")
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    assert "attachment" in response.headers.get("content-disposition", "")
+    body = response.text
+    assert body.startswith("doi,")
+    assert "10.1016/" in body
+    assert "<!doctype html" not in body.lower()
+
+
+def test_missing_asset_returns_404_not_html(tmp_path: Path) -> None:
+    client = client_for(tmp_path)
+    # A missing file-like path must not be masked by the SPA fallback with HTML.
+    response = client.get("/assets/does-not-exist.js")
+    assert response.status_code == 404
+    response = client.get("/examples/does-not-exist.csv")
+    assert response.status_code == 404
+
+
+def test_spa_fallback_still_serves_app_routes(tmp_path: Path) -> None:
+    client = client_for(tmp_path)
+    response = client.get("/papers")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_minimal_csv_requires_header() -> None:
+    import pytest
+
+    from lit_harvest.input.doi_loader import load_dois
+
+    with_header = Path("/tmp/minimal_with_header.csv")
+    with_header.write_text("doi\n10.1000/x\n", encoding="utf-8")
+    assert [item.doi for item in load_dois(with_header).valid] == ["10.1000/x"]
+
+    without_header = Path("/tmp/minimal_without_header.csv")
+    without_header.write_text("10.1000/x\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not found"):
+        load_dois(without_header)

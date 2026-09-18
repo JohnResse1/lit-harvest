@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 from lit_harvest.api.dependencies import ContainerDep
@@ -46,6 +46,19 @@ def list_papers(
         paper.model_dump(mode="json")
         for paper in container.papers.list(limit=limit, offset=offset, stage=stage)
     ]
+
+
+@router.get("/import/sample.csv", include_in_schema=False)
+def sample_csv() -> PlainTextResponse:
+    """Download the starter CSV used by the batch-import panel."""
+    path = Path(__file__).parent.parent / "examples" / "dois.sample.csv"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Sample file is not available")
+    return PlainTextResponse(
+        path.read_text(encoding="utf-8"),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="dois.sample.csv"'},
+    )
 
 
 @router.post("/import")

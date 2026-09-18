@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -67,6 +67,11 @@ def create_app(config: AppConfig | None = None, *, start_worker: bool = True) ->
             candidate = STATIC_DIR / path
             if candidate.is_file():
                 return FileResponse(candidate)
+            # Serving index.html for asset/API/example paths hides 404s behind a
+            # successful HTML response. Only fall back for real app routes.
+            suffix = Path(path).suffix.lower()
+            if suffix and suffix not in {".html"}:
+                raise HTTPException(status_code=404, detail=f"Not found: {path}")
             return FileResponse(STATIC_DIR / "index.html")
 
     return application

@@ -228,6 +228,29 @@ providers:
 .venv/bin/lit-harvest fetch papers.csv --doi-column doi
 ```
 
+#### CSV 最少需要什么
+
+CSV **必须有表头行**，并且至少有一列是你指定的 DOI 列（默认列名 `doi`）。只有 DOI 列是必需的，
+其他列会被忽略。
+
+```csv
+doi
+10.1016/j.mtcomm.2026.115551
+```
+
+| 要求 | 说明 |
+| --- | --- |
+| 表头行 | **必需。** 没有表头会报 `Column 'doi' not found`。 |
+| DOI 列 | 默认列名 `doi`，可在「DOI 列名」修改或使用 `--doi-column`。 |
+| 其他列 | 可选。`title`、`notes` 等导入时会被忽略。 |
+| 编码 | UTF-8，带不带 BOM 均可。 |
+| 分隔符 | `.csv` 用逗号，`.tsv` 用 Tab；`.txt` 每行一个 DOI。 |
+| 重复 DOI | 自动去重，保留首次出现顺序。 |
+| 无效行 | 逐行报告，不会中断整批。 |
+| 支持的 DOI 写法 | 裸 DOI、`https://doi.org/...`、`http://dx.doi.org/...`、`doi:...`、`DOI: ...` |
+
+如果你的文件没有表头，可以改存为 `.txt`（每行一个 DOI），或者手动加上 `doi` 表头。
+
 ### 导入 DOI 文件（网页版）
 
 打开 `http://127.0.0.1:8765/papers`，使用「**从文件批量导入**」面板：

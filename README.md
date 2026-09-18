@@ -231,6 +231,30 @@ providers:
 .venv/bin/lit-harvest fetch papers.csv --doi-column doi
 ```
 
+#### Minimum CSV requirements
+
+A CSV must have a **header row**, and at least one column whose name you pass as the DOI column
+(`doi` by default). Only the DOI column is required — extra columns are ignored and kept as import
+metadata.
+
+```csv
+doi
+10.1016/j.mtcomm.2026.115551
+```
+
+| Requirement | Notes |
+| --- | --- |
+| Header row | **Required.** A headerless file raises `Column 'doi' not found`. |
+| DOI column | Default name `doi`; change it with the **DOI column** field or `--doi-column`. |
+| Extra columns | Optional. `title`, `notes`, etc. are ignored during import. |
+| Encoding | UTF-8, with or without BOM. |
+| Delimiter | `,` for `.csv`, tab for `.tsv`; `.txt` is one DOI per line. |
+| Duplicates | Removed automatically; first occurrence wins. |
+| Invalid rows | Reported per row and do not stop the batch. |
+| Accepted DOI forms | Bare, `https://doi.org/...`, `http://dx.doi.org/...`, `doi:...`, `DOI: ...` |
+
+If your file has no header, convert it to `.txt` (one DOI per line) or add a `doi` header.
+
 ### Import a DOI file (Web UI)
 
 Open `http://127.0.0.1:8765/papers` and use the **Batch import from file** panel:

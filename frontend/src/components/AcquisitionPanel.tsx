@@ -98,7 +98,7 @@ export function AcquisitionPanel({ onChanged }: { onChanged: () => void }) {
           >
             {t("uploadAndImport")}
           </button>
-          <a className="sample-link" href="/examples/dois.sample.csv" download>
+          <a className="sample-link" href="/api/papers/import/sample.csv" download>
             {t("downloadSampleCsv")}
           </a>
           {importResult ? (

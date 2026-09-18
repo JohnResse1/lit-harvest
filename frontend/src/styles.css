@@ -160,3 +160,38 @@ dl dd { margin: 0; font-size: .88rem; }
 .invalid-list { margin: 6px 0 0; padding-left: 18px; color: #9a4a2a; }
 .invalid-list code { overflow-wrap: anywhere; }
 @media (max-width: 1200px) { .acquisition-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+
+/* Form controls use a light surface, so pin their colors regardless of OS theme. */
+input,
+textarea,
+select {
+  color: #172238 !important;
+  background-color: #fff;
+  -webkit-text-fill-color: #172238;
+  caret-color: #2f66dc;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #9aa7bb !important;
+  -webkit-text-fill-color: #9aa7bb;
+  opacity: 1;
+}
+input:disabled,
+textarea:disabled,
+select:disabled {
+  color: #8a97aa !important;
+  -webkit-text-fill-color: #8a97aa;
+  background-color: #f3f6fb;
+}
+input[type="file"] {
+  color: #172238 !important;
+  -webkit-text-fill-color: #172238;
+}
+.search-input,
+.number-input,
+.text-input,
+.file-input {
+  color: #172238 !important;
+  -webkit-text-fill-color: #172238;
+  background-color: #fff;
+}
