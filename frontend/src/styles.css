@@ -131,3 +131,14 @@ dl dd { margin: 0; font-size: .88rem; }
   background: #8fe0c2;
 }
 .identifier-row { display: contents; }
+
+.acquisition-panel { display: grid; gap: 16px; }
+.acquisition-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.acquisition-block { display: grid; gap: 10px; align-content: start; }
+.acquisition-block h3 { font-size: .9rem; }
+.search-input.full { min-width: 100%; width: 100%; }
+.checkbox { display: flex; align-items: center; gap: 8px; color: #62718b; font-size: .84rem; }
+.field-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #62718b; font-size: .84rem; }
+.number-input { width: 110px; padding: 9px 11px; border: 1px solid #dbe3ee; border-radius: 9px; }
+.toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 900px) { .acquisition-grid { grid-template-columns: 1fr; } }

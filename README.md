@@ -288,6 +288,7 @@ lit-harvest pause [--reason TEXT] [--config PATH]
 lit-harvest resume [--config PATH]
 lit-harvest retry --job-id ID | --transient [--config PATH]
 lit-harvest security scan [ROOT] [--json]
+lit-harvest worker [--once] [--poll-interval S] [--max-jobs N] [--config PATH]
 lit-harvest ui [--host HOST] [--port PORT] [--config PATH]
 ```
 
@@ -403,6 +404,14 @@ POST /api/papers/import
 POST /api/papers/doi
 GET  /api/papers/export
 GET  /api/papers/{paper_id}
+GET  /api/papers/{paper_id}/download/xml|pdf|normalized
+POST /api/papers/download/zip
+
+POST /api/search
+GET  /api/search
+
+GET  /api/worker
+POST /api/worker/tick
 
 GET  /api/providers
 GET  /api/providers/quotas
@@ -428,6 +437,24 @@ GET  /api/events          # Server-Sent Events
 | `/papers/:id` | Paper detail | 文献详情 |
 | `/providers` | Providers & quotas | 提供商与配额 |
 | `/failures` | Failure center | 失败任务 |
+
+The Papers page also exposes:
+
+| Control | Purpose |
+| --- | --- |
+| Add a DOI | Queue and immediately fetch one DOI, optionally with PDF |
+| Search Scopus | Run a discovery query from the browser |
+| Download all data (ZIP) | Bundle XML, PDF, normalized JSON, and state |
+| Export CSV | Download the paper registry |
+| Per-paper buttons | Download XML, PDF, or normalized JSON |
+
+The background worker starts automatically with `lit-harvest ui`, so pause/resume/retry from the
+dashboard actually execute queued jobs. Run it headless with:
+
+```bash
+lit-harvest worker
+lit-harvest worker --once
+```
 
 The dashboard follows your browser language and can be switched at runtime with the **中文 / EN**
 control. All controls call the same backend service layer as the CLI.

@@ -409,6 +409,31 @@ def retry(
 
 
 @app.command()
+def worker(
+    poll_interval: Annotated[float, typer.Option("--poll-interval", min=0.1)] = 2.0,
+    max_jobs: Annotated[int, typer.Option("--max-jobs", min=1)] = 25,
+    once: Annotated[
+        bool, typer.Option("--once", help="Run one batch and exit instead of looping.")
+    ] = False,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Run queued jobs in the background (or in one batch with --once)."""
+    container = _container(config)
+    container.worker.poll_interval_seconds = poll_interval
+    container.worker.max_jobs_per_tick = max_jobs
+    if once:
+        _print_json(container.worker.state.last_result or {})
+        container.worker.run_once(max_jobs=max_jobs)
+        _print_json(container.worker.state.last_result or {})
+        return
+    console.print("Worker started. Press Ctrl+C to stop.")
+    try:
+        container.worker.run_forever()
+    except KeyboardInterrupt:
+        console.print("Worker stopped.")
+
+
+@app.command()
 def ui(
     host: Annotated[str | None, typer.Option("--host")] = None,
     port: Annotated[int | None, typer.Option("--port")] = None,

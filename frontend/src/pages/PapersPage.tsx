@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AcquisitionPanel } from "../components/AcquisitionPanel";
 import { api } from "../lib/api";
 import { useLanguage } from "../lib/LanguageContext";
 import type { Paper } from "../types/api";
@@ -11,10 +12,25 @@ export function PapersPage() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [includePdf, setIncludePdf] = useState(true);
+
+  const refresh = () => {
+    api.papers().then(setPapers).catch((reason: Error) => setError(reason.message));
+  };
 
   useEffect(() => {
-    api.papers().then(setPapers).catch((reason: Error) => setError(reason.message));
+    refresh();
   }, []);
+
+  const downloadZip = async () => {
+    const blob = await api.batchZip(null, includePdf);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "lit-harvest-papers.zip";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const filtered = papers.filter((paper) => {
     const haystack = `${paper.title ?? ""} ${paper.doi ?? ""} ${paper.journal ?? ""}`.toLowerCase();
@@ -26,6 +42,15 @@ export function PapersPage() {
       <div className="page-heading">
         <div><p className="eyebrow">{t("literatureLifecycle")}</p><h1>{t("navPapers")}</h1></div>
         <input className="search-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("filterPlaceholder")} />
+      </div>
+      <AcquisitionPanel onChanged={refresh} />
+      <div className="toolbar">
+        <label className="checkbox">
+          <input type="checkbox" checked={includePdf} onChange={(event) => setIncludePdf(event.target.checked)} />
+          {t("includePdfZip")}
+        </label>
+        <button className="button" onClick={downloadZip}>{t("batchDownload")}</button>
+        <a className="button" href={api.exportUrl("csv")}>{t("exportCsv")}</a>
       </div>
       <div className="stage-legend">
         {stages.map((stage, index) => (

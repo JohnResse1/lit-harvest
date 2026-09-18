@@ -11,6 +11,7 @@ from lit_harvest.providers.registry import ProviderRegistry, build_default_regis
 from lit_harvest.quotas.manager import QuotaManager
 from lit_harvest.scheduler.queue import QueueControl
 from lit_harvest.scheduler.scheduler import Scheduler
+from lit_harvest.scheduler.worker import Worker
 from lit_harvest.services.acquisition import AcquisitionService
 from lit_harvest.services.dashboard import DashboardService
 from lit_harvest.services.maintenance import MaintenanceService
@@ -60,6 +61,10 @@ class ServiceContainer:
             queue_control=self.queue_control,
         )
         self.scheduler.register(self.acquisition.task_type, self.acquisition.handle_job)
+        self.worker = Worker(
+            self.scheduler,
+            poll_interval_seconds=2.0,
+        )
         self.dashboard = DashboardService(self.database, self.storage, self.scheduler)
         self.maintenance = MaintenanceService(self.database, self.scheduler)
 
@@ -122,4 +127,9 @@ class ServiceContainer:
             checks["credential_status"] = "secret_missing"
         else:
             checks["credential_status"] = "detected"
+        checks["worker"] = {
+            "running": self.worker.alive,
+            "ticks": self.worker.state.ticks,
+            "last_result": self.worker.state.last_result,
+        }
         return checks

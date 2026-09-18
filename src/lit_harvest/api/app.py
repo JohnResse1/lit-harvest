@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -13,6 +15,7 @@ from lit_harvest.api.events import router as events_router
 from lit_harvest.api.routes.jobs import router as jobs_router
 from lit_harvest.api.routes.papers import router as papers_router
 from lit_harvest.api.routes.providers import router as providers_router
+from lit_harvest.api.routes.search import router as search_router
 from lit_harvest.api.routes.system import router as system_router
 from lit_harvest.config import AppConfig, load_config
 from lit_harvest.services.container import ServiceContainer
@@ -20,16 +23,28 @@ from lit_harvest.services.container import ServiceContainer
 STATIC_DIR = Path(__file__).parent / "static"
 
 
-def create_app(config: AppConfig | None = None) -> FastAPI:
+def create_app(config: AppConfig | None = None, *, start_worker: bool = True) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        container = application.state.container
+        if start_worker and not container.worker.alive:
+            container.worker.start()
+        try:
+            yield
+        finally:
+            container.worker.stop()
+
     application = FastAPI(
         title="Literature Harvester",
         version=__version__,
         description="Local-first literature discovery, acquisition, and normalization.",
+        lifespan=lifespan,
     )
     application.state.container = ServiceContainer(config or load_config())
     application.include_router(system_router, prefix="/api")
     application.include_router(papers_router, prefix="/api")
     application.include_router(providers_router, prefix="/api")
+    application.include_router(search_router, prefix="/api")
     application.include_router(jobs_router, prefix="/api")
     application.include_router(events_router, prefix="/api")
 

@@ -285,6 +285,7 @@ lit-harvest pause [--reason TEXT] [--config PATH]
 lit-harvest resume [--config PATH]
 lit-harvest retry --job-id ID | --transient [--config PATH]
 lit-harvest security scan [ROOT] [--json]
+lit-harvest worker [--once] [--poll-interval S] [--max-jobs N] [--config PATH]
 lit-harvest ui [--host HOST] [--port PORT] [--config PATH]
 ```
 
@@ -400,6 +401,14 @@ POST /api/papers/import
 POST /api/papers/doi
 GET  /api/papers/export
 GET  /api/papers/{paper_id}
+GET  /api/papers/{paper_id}/download/xml|pdf|normalized
+POST /api/papers/download/zip
+
+POST /api/search
+GET  /api/search
+
+GET  /api/worker
+POST /api/worker/tick
 
 GET  /api/providers
 GET  /api/providers/quotas
@@ -424,6 +433,24 @@ GET  /api/events          # Server-Sent Events
 | `/papers` | Papers | 文献 |
 | `/providers` | Providers & quotas | 提供商与配额 |
 | `/failures` | Failure center | 失败任务 |
+
+文献页面还提供：
+
+| 控件 | 作用 |
+| --- | --- |
+| 添加 DOI | 排队并立即获取单个 DOI，可选同时下载 PDF |
+| 检索 Scopus | 在浏览器中执行发现检索 |
+| 打包下载全部数据（ZIP） | 打包 XML、PDF、规范化 JSON 和 state |
+| 导出 CSV | 下载文献注册表 |
+| 单篇按钮 | 下载 XML、PDF 或规范化 JSON |
+
+`lit-harvest ui` 启动时会自动运行后台 worker，因此面板中的暂停/恢复/重试会真正执行队列任务。
+也可以独立运行：
+
+```bash
+lit-harvest worker
+lit-harvest worker --once
+```
 
 面板会根据浏览器语言自动选择，并可通过 **中文 / EN** 控件运行时切换。所有操作都调用与 CLI
 相同的后端服务层。

@@ -26,7 +26,12 @@ export function PaperDetailPage({ paperId }: { paperId: string }) {
           <h1>{paper.title ?? t("untitled")}</h1>
           <p className="mono">{paper.doi ?? t("noDoi")}</p>
         </div>
-        <StatusBadge value={paper.stage} />
+        <div className="actions">
+          <StatusBadge value={paper.stage} />
+          <a className="button" href={api.downloadUrl(paper.id, "xml")}>{t("downloadXml")}</a>
+          <a className="button" href={api.downloadUrl(paper.id, "pdf")}>{t("downloadPdf")}</a>
+          <a className="button" href={api.downloadUrl(paper.id, "normalized")}>{t("downloadJson")}</a>
+        </div>
       </div>
 
       <div className="two-column">
