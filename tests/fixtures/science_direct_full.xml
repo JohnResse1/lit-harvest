@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<full-text-retrieval-response xmlns:ce="http://www.elsevier.com/xml/ani/common" xmlns:xocs="http://www.elsevier.com/xml/xocs/dtd" xmlns:ja="http://www.elsevier.com/xml/ja/dtd" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:prism="http://prismstandard.org/namespaces/basic/2.0/">
+  <coredata>
+    <dc:identifier>doi:10.1016/j.mtcomm.2026.115551</dc:identifier>
+    <dc:title>Solid-state battery interfaces</dc:title>
+    <dc:creator>Zhang, Li</dc:creator>
+    <prism:publicationName>Materials Today Communications</prism:publicationName>
+    <prism:issn>2352-4928</prism:issn>
+    <prism:volume>42</prism:volume>
+    <prism:coverDate>2026-03-01</prism:coverDate>
+    <prism:doi>10.1016/j.mtcomm.2026.115551</prism:doi>
+    <pii>S2352492826001234</pii>
+    <eid>2-s2.0-85123456789</eid>
+    <scopus-id>85123456789</scopus-id>
+    <openaccess>1</openaccess>
+    <openaccessType>hybrid</openaccessType>
+    <license>CC BY</license>
+  </coredata>
+  <xocs:meta>
+    <xocs:document-type>AR</xocs:document-type>
+    <xocs:document-subtype>Article</xocs:document-subtype>
+    <xocs:article-number>115551</xocs:article-number>
+    <xocs:date-received>2026-01-02</xocs:date-received>
+    <xocs:date-revised>2026-02-01</xocs:date-revised>
+    <xocs:date-accepted>2026-02-10</xocs:date-accepted>
+    <xocs:date-online>2026-02-12</xocs:date-online>
+  </xocs:meta>
+  <abstract>
+    <ce:abstract xmlns:ce="http://www.elsevier.com/xml/ani/common">
+      <ce:abstract-sec><ce:simple-para>Solid-state batteries require stable interfaces.</ce:simple-para></ce:abstract-sec>
+    </ce:abstract>
+  </abstract>
+  <authors>
+    <author>
+      <ce:given-name>Li</ce:given-name>
+      <ce:surname>Zhang</ce:surname>
+      <ce:orcid>0000-0002-1234-5678</ce:orcid>
+      <ce:email>li@example.edu</ce:email>
+      <ce:affiliation id="aff1"/>
+    </author>
+    <author>
+      <ce:given-name>Ming</ce:given-name>
+      <ce:surname>Wang</ce:surname>
+    </author>
+  </authors>
+  <affiliations>
+    <affiliation id="aff1">
+      <ce:affilname>Harbin Institute of Technology</ce:affilname>
+      <ce:city>Harbin</ce:city>
+      <ce:country>China</ce:country>
+    </affiliation>
+  </affiliations>
+  <keywords>
+    <keyword>solid-state battery</keyword>
+    <keyword>interface</keyword>
+  </keywords>
+  <body>
+    <section id="sec1">
+      <title>Introduction</title>
+      <para id="p1">Interfaces are critical.</para>
+      <section id="sec1-1">
+        <title>Background</title>
+        <para id="p2">Prior work studied stability.</para>
+      </section>
+    </section>
+    <section id="sec2">
+      <title>Methods</title>
+      <para id="p3">Samples were annealed.</para>
+      <figure id="fig1">
+        <label>Fig. 1</label>
+        <caption>Interface morphology.</caption>
+        <image href="https://example.org/fig1_large.jpg" resolution="large"/>
+      </figure>
+      <table id="tab1">
+        <label>Table 1</label>
+        <caption>Conductivity values.</caption>
+        <row><cell>Sample</cell><cell>Value</cell></row>
+        <row><cell>A</cell><cell>3.2</cell></row>
+      </table>
+      <equation id="eq1"><label>1</label><math xmlns="http://www.w3.org/1998/Math/MathML"><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></math></equation>
+    </section>
+  </body>
+  <bibliography>
+    <reference id="ref1">
+      <author>Smith, J.</author>
+      <title>Reference title</title>
+      <journal>Journal of Testing</journal>
+      <year>2024</year>
+      <doi>10.1000/ref</doi>
+    </reference>
+  </bibliography>
+</full-text-retrieval-response>

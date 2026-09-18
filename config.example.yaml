@@ -1,0 +1,31 @@
+storage:
+  root: ./data
+database:
+  url: sqlite:///./data/lit_harvest.db
+scheduler:
+  retry:
+    max_attempts: 4
+    base_delay_seconds: 2
+  rate_limit:
+    respect_retry_after: true
+  quota:
+    warning_ratio: 0.30
+    low_ratio: 0.10
+server:
+  host: 127.0.0.1
+  port: 8765
+providers:
+  elsevier:
+    enabled: true
+    services:
+      scopus_search:
+        enabled: true
+      article_retrieval:
+        enabled: true
+    credentials:
+      - name: university_primary
+        # Run: lit-harvest auth set elsevier university_primary
+        # Secrets are stored in <project>/.lit-harvest/secrets.json with mode 0600.
+        secret_ref: file:elsevier:university_primary
+        institution: HIT
+        quota_scope: institution
