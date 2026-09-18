@@ -144,6 +144,11 @@ cp config.example.yaml config.yaml
 ```
 
 ### 2. 保存 Elsevier 凭证
+首先需要主动申请Elsevier的API，网址如下
+
+```http
+https://dev.elsevier.com
+```
 
 密钥保存在项目内部，不需要 `export` 环境变量：
 

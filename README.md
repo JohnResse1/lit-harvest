@@ -146,6 +146,12 @@ cp config.example.yaml config.yaml
 ```
 
 ### 2. Store your Elsevier credential
+The pre-requisite is the official Elsevier API key, apply from
+
+```http
+https://dev.elsevier.com
+```
+
 
 Secrets stay inside the project — no shell environment variables required:
 
