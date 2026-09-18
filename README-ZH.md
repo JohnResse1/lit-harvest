@@ -150,10 +150,22 @@ flowchart TD
 git clone https://github.com/JohnResse1/lit-harvest.git
 cd lit-harvest
 
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev]'
+# 创建并激活隔离环境
+python3 -m venv .venv
+source .venv/bin/activate          # macOS / Linux
+.venv\Scripts\Activate.ps1        # Windows PowerShell
+
+# 从当前文件夹安装
+python -m pip install -e .
+
 cp config.example.yaml config.yaml
 ```
+
+> **不熟悉终端操作？** 请先看 **[QUICKSTART.md](QUICKSTART.md)**。里面手把手教你怎么安装
+> Python 和 Git、怎么找到项目文件夹，并给出了三个系统各自的命令。
+
+> 激活环境是让 `lit-harvest` 在三个平台都能直接使用的原因。如果提示
+> `command not found: lit-harvest`，说明你忘了激活。
 
 ### 2. 保存 Elsevier 凭证
 首先需要主动申请Elsevier的API，网址如下

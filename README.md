@@ -153,10 +153,22 @@ into routes, CLI commands, or the frontend.
 git clone https://github.com/JohnResse1/lit-harvest.git
 cd lit-harvest
 
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev]'
+# Create and activate an isolated environment
+python3 -m venv .venv
+source .venv/bin/activate          # macOS / Linux
+.venv\Scripts\Activate.ps1        # Windows PowerShell
+
+# Install from this folder
+python -m pip install -e .
+
 cp config.example.yaml config.yaml
 ```
+
+> **New to the terminal?** Follow **[QUICKSTART.md](QUICKSTART.md)** instead. It covers installing
+> Python and Git, explains how to locate the project folder, and gives per-system commands.
+
+> Activating the environment is what makes `lit-harvest` available as a command on every platform.
+> If you see `command not found: lit-harvest`, you forgot to activate it.
 
 ### 2. Store your Elsevier credential
 The pre-requisite is the official Elsevier API key, apply from
