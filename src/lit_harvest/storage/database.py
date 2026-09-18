@@ -422,6 +422,14 @@ class Database:
         with self.session() as session:
             return [self._paper_from_row(row) for row in session.scalars(statement).all()]
 
+    def delete_paper(self, paper_id: str) -> bool:
+        with self.session() as session:
+            row = session.get(PaperRow, paper_id)
+            if row is None:
+                return False
+            session.delete(row)
+            return True
+
     def count_papers(self, stage: PaperStage | None = None) -> int:
         statement = select(func.count()).select_from(PaperRow)
         if stage:

@@ -32,6 +32,70 @@ def _container(config_path: str | None) -> ServiceContainer:
     return ServiceContainer(load_config(config_path))
 
 
+def _fail(title: str, detail: str, *, hint: str | None = None, code: int = 1) -> None:
+    """Print an actionable message instead of a Python traceback."""
+    console.print(f"[bold red]{title}[/bold red]")
+    console.print(detail)
+    if hint:
+        console.print()
+        console.print(f"[bold]What to do:[/bold] {hint}")
+    raise typer.Exit(code=code)
+
+
+def _explain(exc: Exception) -> None:
+    """Map internal exceptions to plain-language guidance for end users."""
+    from lit_harvest.credentials.manager import CredentialUnavailableError
+    from lit_harvest.providers.base import (
+        AuthenticationError,
+        EntitlementError,
+        NotFoundError,
+        ProviderError,
+    )
+
+    if isinstance(exc, CredentialUnavailableError):
+        _fail(
+            "No Elsevier API key is configured yet.",
+            "This tool talks to Elsevier, so it must have your own API key before it can work.\n"
+            "Nothing was downloaded and no data was changed.",
+            hint=(
+                "Run:  lit-harvest auth set elsevier university_primary\n"
+                "Then: lit-harvest doctor --network\n"
+                "See the Quick Start in README.md if you are unsure how to get a key."
+            ),
+        )
+    if isinstance(exc, AuthenticationError):
+        _fail(
+            "Elsevier rejected your API key.",
+            "The stored key is invalid, expired, or not enabled for this API.",
+            hint=(
+                "Store the key again:  lit-harvest auth set elsevier university_primary\n"
+                "Check the key in the Elsevier Developer Portal."
+            ),
+        )
+    if isinstance(exc, EntitlementError):
+        _fail(
+            "Your account is not entitled to this content.",
+            "The API key works, but your institution or account cannot access this article.",
+            hint="This is an access-rights limit, not a bug. Try another DOI you are entitled to.",
+        )
+    if isinstance(exc, NotFoundError):
+        _fail(
+            "Elsevier could not find this DOI.",
+            "The article may not exist, may be withdrawn, or may not be in ScienceDirect.",
+            hint="Double-check the DOI string.",
+        )
+    if isinstance(exc, ProviderError):
+        _fail(
+            "The publisher request failed.",
+            str(exc),
+            hint="Retry later, or run: lit-harvest doctor --network",
+        )
+    if isinstance(exc, FileNotFoundError):
+        _fail("File not found.", str(exc), hint="Check the path and try again.")
+    if isinstance(exc, ValueError):
+        _fail("That input was not valid.", str(exc), hint="Fix the value and try again.")
+
+
 def _print_json(payload: Any) -> None:
     console.print_json(json.dumps(payload, default=str))
 
@@ -196,6 +260,45 @@ def security_scan(
 
 
 @app.command()
+def demo(
+    reset: Annotated[
+        bool, typer.Option("--reset", help="Delete demo papers first, then regenerate.")
+    ] = False,
+    clear: Annotated[bool, typer.Option("--clear", help="Delete the demo data and exit.")] = False,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Create sample data so you can try the tool without any API key."""
+    from lit_harvest.demo.generator import clear_demo_data, generate_demo_data
+
+    container = _container(config)
+    if clear or reset:
+        removed = clear_demo_data(container)
+        console.print(f"Removed {removed} demo paper(s).")
+        if clear and not reset:
+            return
+    result = generate_demo_data(container)
+    table = Table(title="Demo data ready")
+    table.add_column("Item")
+    table.add_column("Value")
+    table.add_row("New papers", str(result.created_papers))
+    table.add_row("Already present", str(result.skipped_papers))
+    table.add_row("Successful jobs", str(result.created_jobs))
+    table.add_row("Data directory", result.data_dir)
+    table.add_row("Database", result.database)
+    console.print(table)
+    console.print()
+    console.print("[bold]Try it now:[/bold]")
+    console.print("  lit-harvest ui          # open the dashboard")
+    console.print("  lit-harvest jobs        # list jobs")
+    console.print("  lit-harvest export demo.csv")
+    console.print()
+    console.print(
+        "[yellow]Note:[/yellow] these are offline samples. Real downloads still require "
+        "your own Elsevier API key (lit-harvest auth set)."
+    )
+
+
+@app.command()
 def doctor(
     config: Annotated[str | None, typer.Option("--config", help="Path to config.yaml.")] = None,
     network: Annotated[
@@ -269,13 +372,17 @@ def search(
     config: Annotated[str | None, typer.Option("--config")] = None,
 ) -> None:
     """Discover papers with Scopus Search STANDARD and store them locally."""
-    result = _container(config).acquisition.search(
-        query,
-        max_results=max_results,
-        start_year=start_year,
-        end_year=end_year,
-        export=export,
-    )
+    try:
+        result = _container(config).acquisition.search(
+            query,
+            max_results=max_results,
+            start_year=start_year,
+            end_year=end_year,
+            export=export,
+        )
+    except Exception as exc:  # noqa: BLE001 - translated into user guidance
+        _explain(exc)
+        return
     _print_json(
         {
             "query": result.query,
@@ -303,8 +410,15 @@ def fetch(
     """Queue and retrieve full text for one DOI or a DOI list."""
     container = _container(config)
     path = Path(source)
-    if path.exists() and path.is_file():
-        imported = container.acquisition.import_dois(path, doi_column=doi_column)
+    try:
+        if path.exists() and path.is_file():
+            imported = container.acquisition.import_dois(path, doi_column=doi_column)
+        else:
+            imported = None
+    except Exception as exc:  # noqa: BLE001 - translated into user guidance
+        _explain(exc)
+        return
+    if imported is not None:
         _print_json(
             {
                 "queued": imported.queued,
@@ -315,7 +429,11 @@ def fetch(
         run = container.scheduler.run(max_jobs=imported.queued or 0)
         _print_json(run)
         return
-    fetched = container.acquisition.fetch_now(source)
+    try:
+        fetched = container.acquisition.fetch_now(source)
+    except Exception as exc:  # noqa: BLE001 - translated into user guidance
+        _explain(exc)
+        return
     payload: dict[str, Any] = {
         "paper_id": fetched.paper_id,
         "doi": fetched.doi,
@@ -328,6 +446,10 @@ def fetch(
             payload["pdf"] = container.acquisition.fetch_pdf(fetched.paper_id)
         except Exception as exc:  # noqa: BLE001 - XML success must remain usable
             payload["pdf_error"] = {"code": getattr(exc, "code", "pdf_failed"), "message": str(exc)}
+            console.print(
+                "[yellow]XML saved successfully, but the PDF could not be "
+                f"downloaded: {exc}[/yellow]"
+            )
     _print_json(payload)
 
 
@@ -341,7 +463,10 @@ def parse(
     config: Annotated[str | None, typer.Option("--config")] = None,
 ) -> None:
     """Normalize downloaded raw documents that are not yet parsed."""
-    _print_json(_container(config).acquisition.parse_pending(limit=limit, force=force))
+    try:
+        _print_json(_container(config).acquisition.parse_pending(limit=limit, force=force))
+    except Exception as exc:  # noqa: BLE001 - translated into user guidance
+        _explain(exc)
 
 
 @app.command()

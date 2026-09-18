@@ -6,6 +6,18 @@
 
 [English](README.md) · [简体中文](README-ZH.md)
 
+> ## 🚀 第一次使用这个项目？从这里开始
+>
+> **[➡️ 阅读快速开始指南（简体中文）](QUICKSTART.md#简体中文)**
+>
+> 这份指南是写给**从没用过本工具、也不会写代码**的人的。它完整演示两种使用方式——
+> **网页面板**和**命令行**，并且包含**无需任何 API Key 的离线演示模式**。
+>
+> 本 README 的其余部分属于进阶参考。
+
+---
+
+
 [![CI](https://github.com/JohnResse1/lit-harvest/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnResse1/lit-harvest/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab.svg)](https://www.python.org/)
@@ -327,6 +339,7 @@ http://127.0.0.1:8765/docs
 
 ```text
 lit-harvest version
+lit-harvest demo [--reset] [--clear]
 lit-harvest doctor  [--network] [--json] [--config PATH]
 
 lit-harvest auth set    [provider] [name] [--secret-ref REF] [--config PATH]
@@ -611,6 +624,7 @@ database:
 
 | 文档 | 内容 |
 | --- | --- |
+| [**快速开始**](QUICKSTART.md) | **新手从这里开始 —— 网页端 + 命令行** |
 | [架构](docs/ARCHITECTURE.md) | 分层、边界、数据流 |
 | [数据模型](docs/DATA_MODEL.md) | 核心实体与 SQLite schema |
 | [本地 API](docs/API.md) | 端点与 UI 路由 |

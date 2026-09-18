@@ -6,6 +6,19 @@
 
 [English](README.md) · [简体中文](README-ZH.md)
 
+> ## 🚀 New to this project? Start here
+>
+> **[➡️ Read the Quick Start guide (English)](QUICKSTART.md)**
+>
+> It is written for people who have **never used this tool and do not write code**. It walks you
+> through both ways of using Literature Harvester — the **web dashboard** and the **command line** —
+> and includes an **offline demo mode** that works **without any API key**.
+>
+> Everything else in this README is a reference for advanced users.
+
+---
+
+
 [![CI](https://github.com/JohnResse1/lit-harvest/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnResse1/lit-harvest/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab.svg)](https://www.python.org/)
@@ -333,6 +346,7 @@ http://127.0.0.1:8765/docs
 
 ```text
 lit-harvest version
+lit-harvest demo [--reset] [--clear]
 lit-harvest doctor  [--network] [--json] [--config PATH]
 
 lit-harvest auth set    [provider] [name] [--secret-ref REF] [--config PATH]
@@ -619,6 +633,7 @@ Rebuild the bilingual frontend:
 
 | Document | Contents |
 | --- | --- |
+| [**Quick Start**](QUICKSTART.md) | **Start here — for new users, web + CLI** |
 | [Architecture](docs/ARCHITECTURE.md) | Layers, boundaries, data flow |
 | [Data Model](docs/DATA_MODEL.md) | Core entities and SQLite schema |
 | [Local API](docs/API.md) | Endpoints and UI routes |
