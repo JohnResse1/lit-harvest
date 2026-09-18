@@ -29,10 +29,13 @@ Literature Harvester 面向个人研究者，支持：
 - 支持 CSV、TSV、TXT、JSON、JSONL 的 DOI 导入
 - 确定性的 Elsevier FULL XML 到 `PaperDocument` 规范化
 - Typer CLI 和 React/FastAPI 本地面板
+- 支持运行时切换的中英文双语面板
 - 使用 Server-Sent Events（SSE）实时更新面板
 - 显示 提供商 → 服务 → 凭证 的配额状态
 - 失败中心，支持暂停、恢复、重试和取消
 - 项目内凭证存储，不需要导出 API Key 环境变量
+- 仓库 API 泄漏扫描，并在 CI 中强制执行
+- 运行时路径由当前配置文件解析，可移植
 
 v0.1 不对 PDF 做 OCR；PDF 仅作为原始附件保存，并按访问权限使用。
 
@@ -45,7 +48,7 @@ v0.1 明确不包含：LLM 抽取、材料领域 NER、关系抽取、知识图�
 - 与你账号/机构权限匹配的 Elsevier API Key
 - 只有从源码重新构建前端时才需要 Node.js
 
-发布包和本地 wheel 已经包含构建好的前端，正常使用不需要安装 Node.js。
+发布包和本地 wheel 已经包含构建好的双语前端，正常使用不需要安装 Node.js。
 
 ## 快速开始
 
@@ -400,6 +403,20 @@ GET  /api/events
 /failures     Failure center 和队列控制
 ```
 
+## 安全与路径
+
+提交或公开发布前执行：
+
+```bash
+lit-harvest security scan
+```
+
+扫描器会检查可见文件和 Git 跟踪文件中的疑似 API Key、私钥块；如果 `.lit-harvest/`、
+`config.yaml`、`data/` 或 `.env` 被 Git 跟踪，会直接失败。
+
+运行时路径相对于当前配置文件或当前工作目录解析，不依赖固定绝对路径。也可以通过
+`LIT_HARVEST_CONFIG` 指向仓库外的配置文件。
+
 ## 开发
 
 运行测试和静态检查：
@@ -408,6 +425,7 @@ GET  /api/events
 .venv/bin/pytest
 .venv/bin/ruff check src/lit_harvest tests
 .venv/bin/mypy src/lit_harvest
+.venv/bin/lit-harvest security scan
 ```
 
 修改 React/TypeScript 后重新构建前端：

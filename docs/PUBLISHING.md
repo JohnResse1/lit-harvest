@@ -30,18 +30,29 @@ Review `git status --short` before committing. Do not use `git add -f` on ignore
 
 ## 4. Create a private GitHub repository
 
-With GitHub CLI:
+The simplest path is to create a new empty private repository in the GitHub web UI, then connect it:
+
+```bash
+# HTTPS
+git remote add origin https://github.com/YOUR_ACCOUNT/lit-harvest.git
+
+# Or SSH (requires an SSH key configured for GitHub)
+# git remote add origin git@github.com:YOUR_ACCOUNT/lit-harvest.git
+
+git push -u origin main
+```
+
+If GitHub CLI (`gh`) is installed and authenticated:
 
 ```bash
 gh auth login
 gh repo create lit-harvest --private --source=. --remote=origin --push
 ```
 
-Or create the repository in the GitHub web UI and then run:
+On a fresh machine, SSH may require:
 
 ```bash
-git remote add origin git@github.com:YOUR_ACCOUNT/lit-harvest.git
-git push -u origin main
+ssh-keyscan github.com >> ~/.ssh/known_hosts
 ```
 
 ## 5. Before making it public

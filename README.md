@@ -31,10 +31,13 @@ normalization are intentionally decoupled from later scientific understanding.
 - DOI import from CSV, TSV, TXT, JSON, and JSONL
 - Deterministic Elsevier FULL XML to `PaperDocument` normalization
 - Typer CLI and React/FastAPI local dashboard
+- Bilingual dashboard with runtime English / 中文 switching
 - Server-Sent Events (SSE) for live dashboard updates
 - Provider → service → credential quota visibility
 - Failure center with pause, resume, retry, and cancel controls
 - Project-local secret storage without exporting API keys
+- Repository secret-leak scanner with CI enforcement
+- Portable runtime paths resolved from the active configuration file
 
 PDF OCR is not performed; PDFs are preserved as raw attachments for entitlement-respecting use.
 
@@ -48,7 +51,7 @@ deployment, authentication, and UI secret editing.
 - An Elsevier API key with the access your institution or account is authorized to use
 - Node.js only when rebuilding the frontend from source
 
-The packaged UI is prebuilt, so normal users do not need Node.js.
+The packaged UI is prebuilt and bilingual, so normal users do not need Node.js.
 
 ## Quick Start
 
@@ -381,6 +384,22 @@ GET  /api/events
 /failures     Failure center and queue controls
 ```
 
+## Security and Portability
+
+Check a repository before committing or publishing:
+
+```bash
+lit-harvest security scan
+```
+
+The scanner checks visible/untracked and tracked files for likely API keys and private-key blocks,
+and fails if a protected path such as `.lit-harvest/`, `config.yaml`, `data/`, or `.env` is tracked
+by Git.
+
+Runtime paths are resolved relative to the active configuration file or the current working
+directory. There are no required absolute paths, and `LIT_HARVEST_CONFIG` may point to a
+configuration file outside the repository.
+
 ## Development
 
 Run tests and static checks:
@@ -389,6 +408,7 @@ Run tests and static checks:
 .venv/bin/pytest
 .venv/bin/ruff check src/lit_harvest tests
 .venv/bin/mypy src/lit_harvest
+.venv/bin/lit-harvest security scan
 ```
 
 Rebuild the frontend after changing React or TypeScript code:
