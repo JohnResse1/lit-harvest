@@ -617,6 +617,7 @@ GET  /api/events          # Server-Sent Events
 | `/providers` | Providers & quotas | 提供商与配额 |
 | `/failures` | Failure center | 失败任务 |
 | `/storage` | Storage location | 存储目录 |
+| `/credentials` | API key pool | API 池 |
 
 The Papers page also exposes:
 
@@ -650,6 +651,89 @@ path (`.lit-harvest/`, `config.yaml`, `data/`, `.env`) is tracked by Git. Enforc
 
 See [SECURITY.md](SECURITY.md). Never open a public issue for an active credential leak — revoke the
 key first.
+
+## Open Access First
+
+Open-access content is fetched **before** any publisher API is called. A free copy costs nothing and
+never touches the institutional subscription, so ordinary reading stays out of the usage patterns
+libraries monitor.
+
+```text
+DOI
+ |
+ +-- OpenAlex lookup (no key, no quota)
+ |      |
+ |      +-- free PDF found --> download directly, publisher never contacted
+ |
+ +-- no free copy --> entitled publisher API (counts against your subscription)
+```
+
+The lookup result is cached, and search results already carry open-access details, so a search of
+25 papers costs **one** request rather than 25.
+
+```bash
+lit-harvest search --provider openalex --query 'machine learning materials' --max-results 25
+```
+
+Routing decisions are visible before anything is downloaded:
+
+| Source | Cost | Notes |
+| --- | --- | --- |
+| `openalex/oa_download` | free | Preferred whenever a direct file URL exists |
+| `elsevier/article_retrieval` | subscription | Used only when no free copy is available |
+| `elsevier/article_pdf` | subscription | Publisher PDF |
+
+If an open-access download fails, the tool logs the reason and falls back to the publisher
+automatically; the job is not lost.
+
+## API Key Pool
+
+Every provider's credentials live in one pool, managed from **API pool / API 池** in the dashboard.
+
+```bash
+lit-harvest auth list
+lit-harvest policy show
+```
+
+### How the pool chooses a credential
+
+```text
+1. Filter      drop disabled, missing-secret, unhealthy, and cooling-down entries
+2. Comply      a shared institution/account quota blocks sibling credentials
+3. Rank        health, then explicit priority, then least-recently-used
+4. Record      update last-used time and counters
+5. React       401 -> mark unhealthy; 429 -> mark cooling down
+```
+
+Least-recently-used ordering spreads load across your credentials instead of exhausting one.
+
+### Managing keys in the dashboard
+
+Open **API pool** to add, disable, or delete credentials. Each provider shows an original letter-mark
+badge (publisher logos are registered trademarks and are not redistributed with this project).
+
+| Field | Purpose |
+| --- | --- |
+| Provider | `elsevier`, `openalex`, `springer`, `crossref`, `arxiv`, `pubmed`, `unpaywall` |
+| Name | Internal identifier, for example `university_primary` |
+| API key | Write-only; stored locally and never displayed again |
+| Institution | Used to prevent cross-institution rotation |
+| Quota scope | `credential`, `account`, `institution`, `provider`, or `unknown` |
+| Priority | Lower runs first; use it to prefer one key |
+
+**Secrets are write-only over the API.** A stored key is never returned by any endpoint; the UI only
+shows whether one exists.
+
+### API endpoints
+
+```text
+GET    /api/credentials
+POST   /api/credentials
+POST   /api/credentials/{id}/enabled
+DELETE /api/credentials/{id}?delete_secret=false
+GET    /api/credentials/{provider}/health
+GET    /api/credentials/{provider}/selection
+```
 
 ## Providers
 

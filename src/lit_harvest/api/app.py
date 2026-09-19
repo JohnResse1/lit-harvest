@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from lit_harvest import __version__
 from lit_harvest.api.events import router as events_router
+from lit_harvest.api.routes.credentials import router as credentials_router
 from lit_harvest.api.routes.jobs import router as jobs_router
 from lit_harvest.api.routes.papers import router as papers_router
 from lit_harvest.api.routes.providers import router as providers_router
@@ -50,6 +51,7 @@ def create_app(config: AppConfig | None = None, *, start_worker: bool = True) ->
     application.include_router(search_router, prefix="/api")
     application.include_router(settings_router, prefix="/api")
     application.include_router(jobs_router, prefix="/api")
+    application.include_router(credentials_router, prefix="/api")
     application.include_router(events_router, prefix="/api")
 
     if EXAMPLES_DIR.exists():

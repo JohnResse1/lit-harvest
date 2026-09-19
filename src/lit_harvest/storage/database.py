@@ -192,6 +192,11 @@ class CredentialRow(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     health_status: Mapped[str] = mapped_column(String(32), default=HealthStatus.UNKNOWN.value)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Pool bookkeeping: least-recently-used selection and labels for the UI.
+    notes: Mapped[str | None] = mapped_column(Text)
+    priority: Mapped[int] = mapped_column(Integer, default=100)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    use_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class QuotaStateRow(Base):
@@ -268,6 +273,36 @@ class Database:
         if self.engine.url.database and self.engine.url.database != ":memory:":
             Path(self.engine.url.database).expanduser().parent.mkdir(parents=True, exist_ok=True)
         Base.metadata.create_all(self.engine)
+        self._apply_migrations()
+
+    def _apply_migrations(self) -> None:
+        """Add columns introduced after a database was first created.
+
+        `create_all` only creates missing tables; it never alters existing ones.
+        Without this, upgrading the tool would break an existing database.
+        """
+        additions: dict[str, dict[str, str]] = {
+            "credentials": {
+                "notes": "TEXT",
+                "priority": "INTEGER DEFAULT 100",
+                "last_used_at": "DATETIME",
+                "use_count": "INTEGER DEFAULT 0",
+            },
+        }
+        with self.engine.begin() as connection:
+            for table, columns in additions.items():
+                existing = {
+                    row[1]
+                    for row in connection.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
+                }
+                if not existing:
+                    continue
+                for name, ddl in columns.items():
+                    if name in existing:
+                        continue
+                    connection.exec_driver_sql(
+                        f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"  # noqa: S608 - fixed names
+                    )
 
     @contextmanager
     def session(self) -> Iterator[Session]:
@@ -824,6 +859,8 @@ class Database:
         institution: str | None = None,
         quota_scope: str = "unknown",
         enabled: bool = True,
+        notes: str | None = None,
+        priority: int = 100,
     ) -> str:
         with self.session() as session:
             row = session.scalar(
@@ -846,11 +883,38 @@ class Database:
             row.institution = institution
             row.quota_scope = quota_scope
             row.enabled = enabled
+            if notes is not None:
+                row.notes = notes
+            row.priority = priority
             # A changed secret or a newly configured credential must be eligible again.
             if previous_ref != secret_ref or row.health_status == HealthStatus.UNHEALTHY.value:
                 row.health_status = HealthStatus.UNKNOWN.value
                 row.last_checked_at = None
             return row.id
+
+    def mark_credential_used(self, credential_id: str) -> None:
+        """Record a successful use so the pool can prefer idle credentials."""
+        with self.session() as session:
+            row = session.get(CredentialRow, credential_id)
+            if row is None:
+                return
+            row.last_used_at = utc_now()
+            row.use_count = (row.use_count or 0) + 1
+
+    def set_credential_enabled(self, credential_id: str, enabled: bool) -> None:
+        with self.session() as session:
+            row = session.get(CredentialRow, credential_id)
+            if row is None:
+                raise KeyError(f"Credential not found: {credential_id}")
+            row.enabled = enabled
+
+    def delete_credential(self, credential_id: str) -> bool:
+        with self.session() as session:
+            row = session.get(CredentialRow, credential_id)
+            if row is None:
+                return False
+            session.delete(row)
+            return True
 
     def set_credential_health(
         self, credential_id: str, status: HealthStatus, message: str | None = None
@@ -890,6 +954,10 @@ class Database:
                     "enabled": row.enabled,
                     "health_status": row.health_status,
                     "last_checked_at": aware(row.last_checked_at),
+                    "notes": row.notes,
+                    "priority": row.priority,
+                    "last_used_at": aware(row.last_used_at),
+                    "use_count": row.use_count,
                 }
                 for row in rows
             ]

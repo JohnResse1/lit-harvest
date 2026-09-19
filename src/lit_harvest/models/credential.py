@@ -22,3 +22,6 @@ class Credential(BaseModel):
     health_status: HealthStatus = HealthStatus.UNKNOWN
     last_checked_at: datetime | None = None
     secret_available: bool = False
+    priority: int = 100
+    last_used_at: datetime | None = None
+    use_count: int = 0

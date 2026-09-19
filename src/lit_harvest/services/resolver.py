@@ -1,13 +1,17 @@
 """Resolve a DOI to the best available source.
 
 The resolver is deliberately independent of provider implementations. It reasons
-only about *capabilities* and *document quality*, never about Elsevier specifics,
-so adding a publisher does not change this file.
+only about *capabilities*, *document quality*, and *access cost*.
+
+Access order matters. A free open-access copy costs nothing and never touches an
+institutional subscription, so it is always preferred over a publisher API. This
+keeps ordinary reading off the shared quota that libraries meter and monitor.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from lit_harvest.providers.registry import ProviderRegistry
 
@@ -29,6 +33,11 @@ class CandidateSource:
     format: str
     quality: int
     reason: str = ""
+    # True when this route does not consume an institutional subscription.
+    free_access: bool = False
+    oa_status: str | None = None
+    license: str | None = None
+    url: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -37,6 +46,42 @@ class CandidateSource:
             "format": self.format,
             "quality": self.quality,
             "reason": self.reason,
+            "free_access": self.free_access,
+            "oa_status": self.oa_status,
+            "license": self.license,
+            "url": self.url,
+        }
+
+
+@dataclass(slots=True)
+class OAResult:
+    """Outcome of an open-access lookup for one DOI."""
+
+    doi: str
+    is_oa: bool = False
+    downloadable: bool = False
+    pdf_url: str | None = None
+    landing_url: str | None = None
+    oa_status: str | None = None
+    license: str | None = None
+    version: str | None = None
+    source: str | None = None
+    checked: bool = False
+    errors: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "doi": self.doi,
+            "is_oa": self.is_oa,
+            "downloadable": self.downloadable,
+            "pdf_url": self.pdf_url,
+            "landing_url": self.landing_url,
+            "oa_status": self.oa_status,
+            "license": self.license,
+            "version": self.version,
+            "source": self.source,
+            "checked": self.checked,
+            "errors": self.errors,
         }
 
 
@@ -45,14 +90,119 @@ class Resolver:
 
     def __init__(self, providers: ProviderRegistry):
         self.providers = providers
+        self._oa_cache: dict[str, OAResult] = {}
 
-    def candidates(self, doi: str, *, want_pdf: bool = False) -> list[CandidateSource]:
-        """Ranked list of sources that could supply this DOI.
+    # ------------------------------------------------------------------- OA
 
-        `doi` is accepted for future per-DOI routing (OA lookups, publisher
-        ownership); today the ranking is capability-driven.
+    def oa_lookup(self, doi: str, *, refresh: bool = False) -> OAResult:
+        """Ask every OA-capable provider whether a free copy exists.
+
+        Results are cached per process so repeated routing decisions for the
+        same DOI do not re-query the network.
         """
+        if not refresh and doi in self._oa_cache:
+            return self._oa_cache[doi]
+
+        result = OAResult(doi=doi)
+        for provider in self.providers.with_capability("supports_oa_lookup"):
+            lookup = getattr(provider, "fetch_oa_location", None)
+            if lookup is None:
+                continue
+            result.checked = True
+            try:
+                payload = lookup(doi)
+            except Exception as exc:  # noqa: BLE001 - a failed lookup never blocks retrieval
+                result.errors.append(f"{provider.name}: {exc}")
+                continue
+            if not payload:
+                continue
+            result.is_oa = bool(payload.get("is_oa"))
+            result.downloadable = bool(payload.get("downloadable"))
+            result.pdf_url = payload.get("pdf_url") or result.pdf_url
+            result.landing_url = payload.get("landing_url") or result.landing_url
+            result.oa_status = payload.get("oa_status") or result.oa_status
+            result.license = payload.get("license") or result.license
+            result.version = payload.get("version") or result.version
+            result.source = provider.name
+            if result.downloadable:
+                break
+        self._oa_cache[doi] = result
+        return result
+
+    def clear_oa_cache(self) -> None:
+        self._oa_cache.clear()
+
+    def prime_oa_cache(self, doi: str, payload: dict[str, Any]) -> None:
+        """Record OA information already returned by a search.
+
+        Search results carry open-access details, so storing them here avoids a
+        second network round trip (and its pacing delay) per candidate.
+        """
+        if not doi:
+            return
+        pdf_url = payload.get("pdf_url")
+        self._oa_cache[doi] = OAResult(
+            doi=doi,
+            is_oa=bool(payload.get("is_oa")),
+            downloadable=bool(pdf_url),
+            pdf_url=pdf_url,
+            landing_url=payload.get("oa_url"),
+            oa_status=payload.get("oa_status"),
+            license=payload.get("license"),
+            version=payload.get("version"),
+            source=payload.get("source") or "search",
+            checked=True,
+        )
+
+    # ------------------------------------------------------------- candidates
+
+    def route_for_job(self, doi: str) -> CandidateSource | None:
+        """Pick a provider for a queued job without any network access.
+
+        Queue time must stay offline: a batch import of 500 DOIs should not make
+        500 metadata lookups. The open-access decision happens when the job runs.
+        """
+        del doi  # routing is capability-based until execution time
+        providers = self.providers.fulltext_providers()
+        if not providers:
+            return None
+        provider = providers[0]
+        return CandidateSource(
+            provider=provider.name,
+            service=getattr(provider, "fulltext_service", "article_retrieval"),
+            format="xml",
+            quality=QUALITY["xml"],
+            reason="publisher structured full text",
+        )
+
+    def candidates(
+        self,
+        doi: str,
+        *,
+        want_pdf: bool = False,
+        prefer_oa: bool = True,
+    ) -> list[CandidateSource]:
+        """Ranked sources for this DOI, free access first."""
         sources: list[CandidateSource] = []
+
+        if prefer_oa:
+            oa = self.oa_lookup(doi)
+            if oa.downloadable and oa.pdf_url:
+                sources.append(
+                    CandidateSource(
+                        provider=oa.source or "openalex",
+                        service="oa_download",
+                        format="pdf",
+                        # Free access outranks everything: it costs no quota.
+                        quality=QUALITY["xml"] + 50,
+                        reason="open-access copy (no institutional quota used)",
+                        free_access=True,
+                        oa_status=oa.oa_status,
+                        license=oa.license,
+                        url=oa.pdf_url,
+                    )
+                )
+
         for provider in self.providers.fulltext_providers():
             sources.append(
                 CandidateSource(
@@ -77,6 +227,8 @@ class Resolver:
         sources.sort(key=lambda item: (-item.quality, item.provider))
         return sources
 
-    def best(self, doi: str, *, want_pdf: bool = False) -> CandidateSource | None:
-        matches = self.candidates(doi, want_pdf=want_pdf)
+    def best(
+        self, doi: str, *, want_pdf: bool = False, prefer_oa: bool = True
+    ) -> CandidateSource | None:
+        matches = self.candidates(doi, want_pdf=want_pdf, prefer_oa=prefer_oa)
         return matches[0] if matches else None

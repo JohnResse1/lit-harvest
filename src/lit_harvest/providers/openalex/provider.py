@@ -33,6 +33,9 @@ class OpenAlexProvider:
     supports_fulltext = False
     supports_pdf = False
     supports_metadata = True
+    # OpenAlex reports OA locations, which lets the resolver avoid publisher
+    # APIs entirely when a free copy exists.
+    supports_oa_lookup = True
 
     search_service = "works_search"
     metadata_service = "works_lookup"
@@ -171,6 +174,35 @@ class OpenAlexProvider:
         if end_year:
             return f"to_publication_date:{end_year}-12-31"
         return None
+
+    # ------------------------------------------------------------------- OA
+
+    def fetch_oa_location(self, doi: str) -> dict[str, Any] | None:
+        """Return a downloadable open-access location for this DOI, if any.
+
+        Only direct file URLs are returned. Landing pages are reported but not
+        auto-downloaded, because they are usually HTML wrappers.
+        """
+        metadata = self.fetch_metadata(doi)
+        if not metadata:
+            return None
+        extra = metadata.get("extra") or {}
+        oa = extra.get("open_access") or {}
+        if not isinstance(oa, dict) or not oa.get("is_oa"):
+            return None
+        pdf_url = oa.get("pdf_url")
+        return {
+            "doi": metadata.get("doi"),
+            "is_oa": True,
+            "oa_status": oa.get("oa_status"),
+            "license": oa.get("license"),
+            "version": oa.get("version"),
+            "pdf_url": pdf_url,
+            # A landing page still counts as evidence, just not as a download.
+            "landing_url": oa.get("oa_url"),
+            "downloadable": bool(pdf_url),
+            "source": self.name,
+        }
 
     # --------------------------------------------------------------- metadata
 

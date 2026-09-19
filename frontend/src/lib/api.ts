@@ -109,6 +109,35 @@ export interface StorageValidation {
   empty: boolean;
 }
 
+export interface PoolCredential {
+  credential_id: string;
+  provider: string;
+  name: string;
+  label: string;
+  secret_ref: string;
+  institution: string | null;
+  quota_scope: string;
+  enabled: boolean;
+  health: string;
+  secret_available: boolean;
+  priority: number;
+  last_used_at: string | null;
+  use_count: number;
+  notes: string | null;
+}
+
+export interface CredentialInput {
+  provider: string;
+  name: string;
+  secret?: string;
+  institution?: string | null;
+  account_label?: string | null;
+  quota_scope?: string;
+  priority?: number;
+  notes?: string | null;
+  enabled?: boolean;
+}
+
 export interface InstanceInfo {
   instance_id: string;
   user: string;
@@ -119,6 +148,33 @@ export interface InstanceInfo {
 export const api = {
   overview: () => request<Overview>("/api/overview"),
   instance: () => request<InstanceInfo>("/api/instance"),
+  credentials: (provider?: string) =>
+    request<PoolCredential[]>(
+      provider ? `/api/credentials?provider=${encodeURIComponent(provider)}` : "/api/credentials",
+    ),
+  addCredential: (input: CredentialInput) =>
+    request<PoolCredential>("/api/credentials", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  toggleCredential: (id: string, enabled: boolean) =>
+    request<PoolCredential>(`/api/credentials/${id}/enabled`, {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
+  deleteCredential: (id: string, deleteSecret = false) =>
+    request<{ credential_id: string; secret_deleted: boolean }>(
+      `/api/credentials/${id}?delete_secret=${deleteSecret}`,
+      { method: "DELETE" },
+    ),
+  credentialHealth: (provider: string) =>
+    request<{ provider: string; credentials: Array<Record<string, unknown>> }>(
+      `/api/credentials/${provider}/health`,
+    ),
+  selectionPreview: (provider: string, service = "article_retrieval") =>
+    request<Record<string, unknown>>(
+      `/api/credentials/${provider}/selection?service=${service}`,
+    ),
   storage: () => request<StorageInfo>("/api/settings/storage"),
   validateStorage: (path: string) =>
     request<StorageValidation>(`/api/settings/storage/validate?path=${encodeURIComponent(path)}`),

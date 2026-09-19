@@ -21,6 +21,12 @@ GET  /api/doctor?network=false
 GET  /api/worker
 GET  /api/policy
 GET  /api/cache
+GET  /api/credentials
+POST /api/credentials
+POST /api/credentials/{id}/enabled
+DELETE /api/credentials/{id}
+GET  /api/credentials/{provider}/health
+GET  /api/credentials/{provider}/selection
 POST /api/cache/cleanup
 POST /api/worker/tick
 
@@ -99,6 +105,12 @@ intentionally gentle.
 `GET /api/cache` reports how much raw full text is stored and what is missing.
 `POST /api/cache/cleanup` deletes the raw cache while keeping metadata and normalized documents
 (pass `?keep_normalized=false` to drop those too).
+
+## Credentials
+
+`/api/credentials` manages the API key pool. Secrets are write-only: a stored key is never returned
+by any endpoint, only whether one is available. `/selection` explains which credential the pool would
+pick and why.
 
 ## UI routes
 

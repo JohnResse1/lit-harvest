@@ -70,6 +70,9 @@ class CredentialManager:
                 health_status=item["health_status"],
                 last_checked_at=item["last_checked_at"],
                 secret_available=self.secrets.exists(item["secret_ref"]),
+                priority=int(item.get("priority") or 100),
+                last_used_at=item.get("last_used_at"),
+                use_count=int(item.get("use_count") or 0),
             )
             if include_secret_availability or credential.enabled:
                 credentials.append(credential)
@@ -89,6 +92,38 @@ class CredentialManager:
         excluded_ids: set[str] | None = None,
         previous_credential_id: str | None = None,
     ) -> Credential:
+        """Pick the credential for a call, recording the use for LRU ordering."""
+        chosen, _ = self._select(
+            provider,
+            service,
+            excluded_ids=excluded_ids,
+            previous_credential_id=previous_credential_id,
+            record=True,
+        )
+        return chosen
+
+    def peek(
+        self,
+        provider: str,
+        service: str,
+        *,
+        excluded_ids: set[str] | None = None,
+    ) -> Credential:
+        """Which credential would be selected, without consuming it.
+
+        Used by the UI to explain pool behaviour; `select` is what real calls use.
+        """
+        return self._select(provider, service, excluded_ids=excluded_ids, record=False)[0]
+
+    def _select(
+        self,
+        provider: str,
+        service: str,
+        *,
+        excluded_ids: set[str] | None = None,
+        previous_credential_id: str | None = None,
+        record: bool = True,
+    ) -> tuple[Credential, list[Credential]]:
         excluded = set(excluded_ids or set())
         if previous_credential_id:
             excluded.add(previous_credential_id)
@@ -118,8 +153,17 @@ class CredentialManager:
             HealthStatus.UNKNOWN: 1,
             HealthStatus.DEGRADED: 2,
         }
-        candidates.sort(key=lambda item: (rank.get(item.health_status, 3), item.name))
-        return candidates[0]
+        candidates.sort(
+            key=lambda item: (
+                rank.get(item.health_status, 3),
+                item.priority,
+                item.last_used_at or datetime.min.replace(tzinfo=UTC),
+                item.name,
+            )
+        )
+        if record:
+            self.database.mark_credential_used(candidates[0].id)
+        return candidates[0], candidates
 
     def _is_blocked(self, provider: str, service: str, credential: Credential) -> bool:
         quota = self.database.get_quota(provider, service, credential.id)

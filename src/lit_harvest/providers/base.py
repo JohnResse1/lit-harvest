@@ -130,6 +130,8 @@ class Provider(Protocol):
     supports_fulltext: bool = False
     supports_pdf: bool = False
     supports_metadata: bool = False
+    # Can this provider tell us where a free (open access) copy lives?
+    supports_oa_lookup: bool = False
 
     def healthcheck(
         self, service: str | None = None, *, network: bool = True

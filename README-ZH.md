@@ -589,6 +589,7 @@ GET  /api/events          # Server-Sent Events
 | `/providers` | Providers & quotas | 提供商与配额 |
 | `/failures` | Failure center | 失败任务 |
 | `/storage` | Storage location | 存储目录 |
+| `/credentials` | API key pool | API 池 |
 
 文献页面还提供：
 
@@ -621,6 +622,85 @@ lit-harvest security scan
 `data/`、`.env` 等受保护路径被 Git 跟踪，会直接失败。CI 中强制执行。
 
 详见 [SECURITY.md](SECURITY.md)。如果发生真实密钥泄漏，请先撤销密钥，不要开公开 Issue。
+
+## OA 优先
+
+开放获取内容会在调用任何出版社 API **之前**尝试获取。免费副本不消耗任何机构订阅，因此日常阅读
+不会进入图书馆监控的使用模式。
+
+```text
+DOI
+ |
+ +-- 查 OpenAlex（无需 Key，不消耗配额）
+ |      |
+ |      +-- 找到免费 PDF --> 直接下载，完全不联系出版社
+ |
+ +-- 没有免费副本 --> 走有权限的出版社 API（计入订阅额度）
+```
+
+查询结果会被缓存，而且检索结果本身已经带 OA 信息，所以检索 25 篇只需 **1 次**请求，而不是 25 次。
+
+```bash
+lit-harvest search --provider openalex --query 'machine learning materials' --max-results 25
+```
+
+下载前即可看到路由决策：
+
+| 来源 | 成本 | 说明 |
+| --- | --- | --- |
+| `openalex/oa_download` | 免费 | 只要存在直接文件链接就优先使用 |
+| `elsevier/article_retrieval` | 订阅 | 仅在没有免费副本时使用 |
+| `elsevier/article_pdf` | 订阅 | 出版社 PDF |
+
+如果 OA 下载失败，会记录原因并自动回退到出版社，任务不会丢失。
+
+## API 密钥池
+
+所有提供商的凭证统一管理，可在面板的「**API pool / API 池**」页面维护。
+
+```bash
+lit-harvest auth list
+lit-harvest policy show
+```
+
+### 池子的选择逻辑
+
+```text
+1. 过滤    排除已禁用、无密钥、不健康、冷却中的凭证
+2. 合规    共享的机构/账号配额会阻止同组其他凭证轮换
+3. 排序    健康度 → 优先级 → 最久未使用
+4. 记录    更新最近使用时间和计数
+5. 反应    401 → 标记不健康；429 → 标记冷却
+```
+
+「最久未使用优先」会把负载分散到多个凭证，而不是耗尽其中一个。
+
+### 在面板中管理密钥
+
+打开「**API 池**」即可新增、禁用、删除凭证。每个提供商会显示一个自绘字母徽标
+（出版社 logo 是注册商标，本项目不分发）。
+
+| 字段 | 用途 |
+| --- | --- |
+| 提供商 | `elsevier`、`openalex`、`springer`、`crossref`、`arxiv`、`pubmed`、`unpaywall` |
+| 名称 | 内部标识，例如 `university_primary` |
+| API Key | 只写不读；仅存本机，保存后不再显示 |
+| 机构 | 用于防止跨机构轮换 |
+| 配额范围 | `credential`、`account`、`institution`、`provider` 或 `unknown` |
+| 优先级 | 数值越小越优先，用于指定首选 Key |
+
+**密钥通过接口只写不读。** 任何端点都不会返回已保存的密钥，界面只显示是否存在。
+
+### 接口
+
+```text
+GET    /api/credentials
+POST   /api/credentials
+POST   /api/credentials/{id}/enabled
+DELETE /api/credentials/{id}?delete_secret=false
+GET    /api/credentials/{provider}/health
+GET    /api/credentials/{provider}/selection
+```
 
 ## 提供商
 

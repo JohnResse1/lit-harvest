@@ -4,6 +4,7 @@ import { PaperDetailPage } from "./pages/PaperDetailPage";
 import { ProvidersPage } from "./pages/ProvidersPage";
 import { FailuresPage } from "./pages/FailuresPage";
 import { StoragePage } from "./pages/StoragePage";
+import { CredentialsPage } from "./pages/CredentialsPage";
 import { LanguageProvider, useLanguage } from "./lib/LanguageContext";
 import { api, type InstanceInfo } from "./lib/api";
 import { useEffect, useState } from "react";
@@ -15,6 +16,7 @@ function CurrentPage() {
   if (path === "/providers") return <ProvidersPage />;
   if (path === "/failures") return <FailuresPage />;
   if (path === "/storage") return <StoragePage />;
+  if (path === "/credentials") return <CredentialsPage />;
   return <OverviewPage />;
 }
 
@@ -31,6 +33,7 @@ function Shell() {
     ["/providers", t("navProviders")],
     ["/failures", t("navFailures")],
     ["/storage", t("navStorage")],
+    ["/credentials", t("navCredentials")],
   ];
   return (
     <div className="app-shell">

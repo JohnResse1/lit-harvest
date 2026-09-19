@@ -17,6 +17,7 @@ from lit_harvest.scheduler.scheduler import Scheduler
 from lit_harvest.scheduler.worker import Worker
 from lit_harvest.services.acquisition import AcquisitionService
 from lit_harvest.services.cache import CacheService
+from lit_harvest.services.credential_pool import CredentialPoolService
 from lit_harvest.services.dashboard import DashboardService
 from lit_harvest.services.maintenance import MaintenanceService
 from lit_harvest.services.normalization import NormalizationService
@@ -67,6 +68,7 @@ class ServiceContainer:
         )
         self.dashboard = DashboardService(self.database, self.storage, self.scheduler)
         self.maintenance = MaintenanceService(self.database, self.scheduler)
+        self.credential_pool = CredentialPoolService(self.credentials, self.credentials.secrets)
         self.storage_settings = StorageSettingsService(self.config, self.database)
 
     def _build_policy_service(self) -> PolicyService:

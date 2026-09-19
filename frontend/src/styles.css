@@ -208,3 +208,29 @@ input[type="file"] {
 th.narrow, td.narrow { width: 40px; text-align: center; }
 .selection-actions { justify-content: flex-end; margin-top: 14px; }
 .selection-count { margin-right: auto; color: #62718b; font-size: .85rem; }
+
+.provider-logo {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  flex: none;
+}
+.provider-cell { display: flex; align-items: center; gap: 9px; font-size: .84rem; }
+.subtle { color: #8593a8; font-size: .74rem; }
+.pool-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+.pool-form .field-row { justify-content: flex-start; gap: 10px; }
+.pool-form select, .pool-form input {
+  padding: 9px 11px;
+  border: 1px solid #dbe3ee;
+  border-radius: 9px;
+  color: #172238 !important;
+  background: #fff;
+}
+.pool-form .search-input { min-width: 220px; }

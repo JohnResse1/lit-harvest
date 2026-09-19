@@ -16,12 +16,14 @@ from lit_harvest.models import (
     Job,
     JobCreate,
     JobStatus,
+    Paper,
     PaperCreate,
     PaperIdentifiers,
     PaperStage,
     TaskType,
 )
 from lit_harvest.providers.base import FullTextResult, ProviderUnavailableError
+from lit_harvest.providers.oa import OpenAccessFetcher
 from lit_harvest.providers.registry import ProviderRegistry
 from lit_harvest.services.cache import CacheService
 from lit_harvest.services.normalization import NormalizationService
@@ -87,6 +89,7 @@ class AcquisitionService:
         providers: ProviderRegistry,
         normalization: NormalizationService,
         cache: CacheService | None = None,
+        oa_fetcher: OpenAccessFetcher | None = None,
     ) -> None:
         self.config = config
         self.database = database
@@ -94,6 +97,7 @@ class AcquisitionService:
         self.providers = providers
         self.normalization = normalization
         self.cache = cache
+        self.oa_fetcher = oa_fetcher or OpenAccessFetcher()
         self.resolver = Resolver(providers)
         self.search_sessions = SearchSessionStore(database)
 
@@ -146,6 +150,9 @@ class AcquisitionService:
                 paper = self.database.upsert_paper(item)
                 if paper is not None:
                     stored += 1
+                # Search payloads already carry OA details; seeding the resolver
+                # avoids a second lookup (and its pacing delay) at fetch time.
+                self._prime_oa_from_search(item)
                 candidates.append(
                     self._candidate_from_paper(item, paper_id=paper.id if paper else None)
                 )
@@ -168,6 +175,25 @@ class AcquisitionService:
             total_results=total_results,
             raw_paths=raw_paths,
             session_id=session.session_id,
+        )
+
+    def _prime_oa_from_search(self, paper: PaperCreate) -> None:
+        if not paper.doi:
+            return
+        oa = (paper.extra or {}).get("open_access")
+        if not isinstance(oa, dict):
+            return
+        self.resolver.prime_oa_cache(
+            paper.doi,
+            {
+                "is_oa": oa.get("is_oa"),
+                "oa_status": oa.get("oa_status") or oa.get("type"),
+                "oa_url": oa.get("oa_url"),
+                "pdf_url": oa.get("pdf_url"),
+                "license": oa.get("license"),
+                "version": oa.get("version"),
+                "source": paper.discovery_source,
+            },
         )
 
     @staticmethod
@@ -319,7 +345,7 @@ class AcquisitionService:
                     PaperCreate(doi=item.doi, discovery_source="doi_import")
                 )
             paper_ids.append(paper.id)
-            route = self.resolver.best(item.doi)
+            route = self.resolver.route_for_job(item.doi)
             job = JobCreate(
                 task_type=TaskType.FETCH_FULLTEXT,
                 paper_id=paper.id,
@@ -373,7 +399,7 @@ class AcquisitionService:
             paper = self.database.create_paper(
                 PaperCreate(doi=normalized, discovery_source="single_doi")
             )
-        route = self.resolver.best(normalized)
+        route = self.resolver.route_for_job(normalized)
         job = self.database.create_job(
             JobCreate(
                 task_type=TaskType.FETCH_FULLTEXT,
@@ -457,6 +483,102 @@ class AcquisitionService:
                 )
         return {"paper_id": paper.id, "doi": paper.doi, "pdf_path": str(path), "reused": False}
 
+    def _try_open_access(self, paper: Paper, doi: str, job: Job) -> FetchResult | None:
+        """Download a free copy when one exists; otherwise return None.
+
+        Failure here is never fatal: the caller falls back to the publisher.
+        """
+        if self.config.providers.all().get("openalex") is not None and not getattr(
+            self.config.providers.get("openalex"), "enabled", False
+        ):
+            return None
+        try:
+            oa = self.resolver.oa_lookup(doi)
+        except Exception as exc:  # noqa: BLE001 - lookup must never block retrieval
+            logger.debug("OA lookup failed for %s: %s", doi, exc)
+            return None
+        if not oa.downloadable or not oa.pdf_url:
+            return None
+        try:
+            payload = self.oa_fetcher.fetch(oa.pdf_url)
+        except Exception as exc:  # noqa: BLE001 - fall back to the publisher
+            logger.info("OA download failed for %s, falling back to publisher: %s", doi, exc)
+            self.database.record_event(
+                provider=oa.source or "openaccess",
+                service="oa_download",
+                paper_id=paper.id,
+                job_id=job.id,
+                event_type="oa_fallback",
+                level="warning",
+                message=str(exc),
+            )
+            return None
+
+        raw_path = self.storage.write_raw(
+            doi, f"openaccess.{payload['format']}", payload["content"]
+        )
+        checksum = sha256_bytes(payload["content"])
+        credential_id = job.credential_id
+        self.database.record_download(
+            paper_id=paper.id,
+            provider=oa.source or "openaccess",
+            service="oa_download",
+            credential_id=credential_id,
+            status=DownloadStatus.SUCCESS.value,
+            format=payload["format"],
+            raw_path=str(raw_path),
+            checksum=checksum,
+            http_status=payload["http_status"],
+        )
+        self.database.add_paper_extra(
+            paper.id,
+            {
+                "oa_status": oa.oa_status,
+                "oa_license": oa.license,
+                "oa_url": payload["url"],
+                "free_access": True,
+            },
+        )
+        self.storage.write_state(
+            doi,
+            {
+                "stage": PaperStage.DOWNLOADED.value,
+                "doi": doi,
+                "raw_path": str(raw_path),
+                "provider": oa.source or "openaccess",
+                "service": "oa_download",
+                "http_status": payload["http_status"],
+                "checksum": checksum,
+                "free_access": True,
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        self.database.set_paper_stage(paper.id, PaperStage.DOWNLOADED)
+
+        # Only structured documents can be normalized deterministically.
+        normalized_path: str | None = None
+        if payload["format"] in {"xml", "html"}:
+            try:
+                normalized = self.normalization.normalize(
+                    content=payload["content"],
+                    doi=doi,
+                    paper_id=paper.id,
+                    source_path=str(raw_path),
+                    credential_label=None,
+                    http_status=payload["http_status"],
+                )
+                normalized_path = str(normalized["path"])
+            except Exception as exc:  # noqa: BLE001 - raw file is still valuable
+                logger.info("OA document for %s could not be normalized: %s", doi, exc)
+        return FetchResult(
+            paper_id=paper.id,
+            doi=doi,
+            raw_path=str(raw_path),
+            normalized_path=normalized_path,
+            reused=False,
+            document=None,
+        )
+
     def _provider_for_fetch(self, job: Job, doi: str) -> Any:
         """Pick the provider for a job, honouring an explicitly pinned route."""
         if job.provider:
@@ -466,7 +588,7 @@ class AcquisitionService:
                     f"Provider {provider.name} cannot retrieve full text."
                 )
             return provider
-        route = self.resolver.best(doi)
+        route = self.resolver.route_for_job(doi)
         if route is None:
             raise ProviderUnavailableError(
                 "No configured provider can retrieve full text for this DOI."
@@ -603,6 +725,12 @@ class AcquisitionService:
                 reused=True,
                 document=paper.extra.get("normalized"),
             )
+
+        # Prefer a free open-access copy: it consumes no institutional quota and
+        # keeps ordinary reading invisible to publisher usage monitoring.
+        oa_attempt = self._try_open_access(paper, doi, job)
+        if oa_attempt is not None:
+            return oa_attempt
 
         provider = self._provider_for_fetch(job, doi)
         result: FullTextResult = provider.fetch_fulltext(doi)

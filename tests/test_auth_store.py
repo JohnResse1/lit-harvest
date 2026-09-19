@@ -125,3 +125,37 @@ def test_secret_is_not_persisted_to_sqlite(tmp_path: Path, monkeypatch: pytest.M
     container = ServiceContainer(config)
     container.credentials.secrets = store
     assert "top-secret" not in (tmp_path / "state.db").read_bytes().decode("latin-1")
+
+
+def test_existing_database_gains_new_credential_columns(tmp_path: Path) -> None:
+    """Upgrading must not break a database created by an older release."""
+    import sqlite3
+
+    from lit_harvest.storage.database import Database
+
+    db_path = tmp_path / "legacy.db"
+    connection = sqlite3.connect(db_path)
+    connection.execute(
+        """
+        CREATE TABLE credentials (
+          id VARCHAR(32) PRIMARY KEY, provider VARCHAR(64), name VARCHAR(128),
+          auth_type VARCHAR(32), secret_ref VARCHAR(256), account_label VARCHAR(128),
+          institution VARCHAR(128), quota_scope VARCHAR(32), enabled BOOLEAN,
+          health_status VARCHAR(32), last_checked_at DATETIME
+        )
+        """
+    )
+    connection.execute(
+        "INSERT INTO credentials (id, provider, name, secret_ref, enabled, health_status) "
+        "VALUES ('c1', 'elsevier', 'primary', 'file:x', 1, 'unknown')"
+    )
+    connection.commit()
+    connection.close()
+
+    database = Database(f"sqlite:///{db_path}")
+    database.initialize()
+
+    columns = {row[1] for row in sqlite3.connect(db_path).execute("PRAGMA table_info(credentials)")}
+    assert {"notes", "priority", "last_used_at", "use_count"} <= columns
+    # Existing rows survive the alteration.
+    assert database.list_credentials("elsevier")[0]["name"] == "primary"

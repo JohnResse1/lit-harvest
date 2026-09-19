@@ -103,15 +103,27 @@ def _authors(work: dict[str, Any]) -> list[dict[str, Any]]:
     return authors
 
 
+def _location(work: dict[str, Any]) -> dict[str, Any]:
+    """`primary_location` may be null, a dict, or missing."""
+    location = work.get("primary_location")
+    return location if isinstance(location, dict) else {}
+
+
+def _source(work: dict[str, Any]) -> dict[str, Any]:
+    source = _location(work).get("source")
+    return source if isinstance(source, dict) else {}
+
+
 def _journal(work: dict[str, Any]) -> tuple[str | None, str | None]:
-    location = work.get("primary_location") or {}
-    source = (location.get("source") or {}) if isinstance(location, dict) else {}
+    source = _source(work)
     return _string(source.get("display_name")), _string(source.get("issn_l"))
 
 
 def _open_access(work: dict[str, Any]) -> dict[str, Any]:
-    oa = work.get("open_access") or {}
-    best = work.get("best_oa_location") or {}
+    oa = work.get("open_access")
+    oa = oa if isinstance(oa, dict) else {}
+    best = work.get("best_oa_location")
+    best = best if isinstance(best, dict) else {}
     return {
         "is_oa": oa.get("is_oa") if isinstance(oa, dict) else None,
         "oa_status": oa.get("oa_status") if isinstance(oa, dict) else None,
@@ -140,11 +152,7 @@ def parse_work(work: dict[str, Any]) -> PaperCreate:
         title=_string(work.get("title")) or _string(work.get("display_name")),
         journal=journal,
         publication_year=_integer(work.get("publication_year")),
-        publisher=_string(
-            work.get("primary_location", {}).get("source", {}).get("host_organization_name")
-        )
-        if isinstance(work.get("primary_location"), dict)
-        else None,
+        publisher=_string(_source(work).get("host_organization_name")),
         document_type=_string(work.get("type")),
         discovery_source="openalex",
         identifiers=identifiers,
