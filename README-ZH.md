@@ -996,6 +996,7 @@ database:
 | --- | --- |
 | [**快速开始**](QUICKSTART.md) | **新手从这里开始 —— 网页端 + 命令行** |
 | [架构](docs/ARCHITECTURE.md) | 分层、边界、数据流 |
+| [AI/LLM 合规说明](docs/LLM_COMPLIANCE.zh-CN.md) | 未来抽取层的数据流向规则 |
 | [数据模型](docs/DATA_MODEL.md) | 核心实体与 SQLite schema |
 | [本地 API](docs/API.md) | 端点与 UI 路由 |
 | [运维说明](docs/OPERATIONS.md) | 凭证、配额、恢复、存储 |

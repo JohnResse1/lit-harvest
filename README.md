@@ -1047,6 +1047,7 @@ Rebuild the bilingual frontend:
 | [**Quick Start**](QUICKSTART.md) | **Start here — for new users, web + CLI** |
 | [Architecture](docs/ARCHITECTURE.md) | Layers, boundaries, data flow |
 | [Document Parsing](docs/PARSING.md) | Deterministic parsers, JATS, PDF policy |
+| [AI/LLM Compliance](docs/LLM_COMPLIANCE.md) | Data-flow rules for the future extraction layer |
 | [Data Model](docs/DATA_MODEL.md) | Core entities and SQLite schema |
 | [Local API](docs/API.md) | Endpoints and UI routes |
 | [Operations](docs/OPERATIONS.md) | Credentials, quotas, resume, storage |
