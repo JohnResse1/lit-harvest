@@ -91,15 +91,34 @@ class OpenAccessFetcher:
             "http_status": response.status_code,
         }
 
+    #: Root elements that only ever appear in HTML documents.
+    _HTML_ROOTS = {b"html", b"div", b"body", b"head", b"span", b"p", b"table"}
+
     @staticmethod
     def _detect_format(content: bytes, content_type: str) -> str | None:
+        """Classify a payload using magic bytes first, content-type last.
+
+        Structure beats the declared content type because servers frequently
+        mislabel scholarly payloads. JATS articles, for example, begin with an
+        NLM ``<!DOCTYPE article ...>`` declaration and must be treated as XML
+        even though the markup could superficially look like HTML.
+        """
         if content.startswith(b"%PDF"):
             return "pdf"
-        stripped = content.lstrip()[:200].lower()
-        if stripped.startswith(b"<?xml"):
+        head = content.lstrip()[:512].lower()
+        if head.startswith(b"<?xml"):
             return "xml"
-        if stripped.startswith(b"<"):
-            return "html"
+        if head.startswith(b"<!doctype"):
+            # `<!DOCTYPE html>` is HTML; an NLM/JATS DOCTYPE is XML.
+            declaration = head.split(b">", 1)[0]
+            return "html" if b"html" in declaration else "xml"
+        if head.startswith(b"<"):
+            if head.startswith(b"<html") or head.startswith(b"<!"):
+                return "html"
+            tag = head[1:].split(b">", 1)[0].split()[:1]
+            if tag and tag[0].split(b"/")[0] in OpenAccessFetcher._HTML_ROOTS:
+                return "html"
+            return "xml"
         if content_type == "application/pdf":
             return "pdf"
         if "xml" in content_type:

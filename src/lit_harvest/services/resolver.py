@@ -60,7 +60,11 @@ class OAResult:
     doi: str
     is_oa: bool = False
     downloadable: bool = False
+    # Downloadable file URL. Often a PDF, but structured XML (e.g. Europe PMC
+    # JATS) is also valid and strictly higher quality, so the format travels
+    # alongside the URL instead of being assumed.
     pdf_url: str | None = None
+    file_format: str | None = None
     landing_url: str | None = None
     oa_status: str | None = None
     license: str | None = None
@@ -75,6 +79,7 @@ class OAResult:
             "is_oa": self.is_oa,
             "downloadable": self.downloadable,
             "pdf_url": self.pdf_url,
+            "file_format": self.file_format,
             "landing_url": self.landing_url,
             "oa_status": self.oa_status,
             "license": self.license,
@@ -119,6 +124,7 @@ class Resolver:
             result.is_oa = bool(payload.get("is_oa"))
             result.downloadable = bool(payload.get("downloadable"))
             result.pdf_url = payload.get("pdf_url") or result.pdf_url
+            result.file_format = payload.get("file_format") or result.file_format
             result.landing_url = payload.get("landing_url") or result.landing_url
             result.oa_status = payload.get("oa_status") or result.oa_status
             result.license = payload.get("license") or result.license
@@ -146,6 +152,7 @@ class Resolver:
             is_oa=bool(payload.get("is_oa")),
             downloadable=bool(pdf_url),
             pdf_url=pdf_url,
+            file_format=payload.get("file_format"),
             landing_url=payload.get("oa_url"),
             oa_status=payload.get("oa_status"),
             license=payload.get("license"),
@@ -188,11 +195,13 @@ class Resolver:
         if prefer_oa:
             oa = self.oa_lookup(doi)
             if oa.downloadable and oa.pdf_url:
+                # Structured OA XML outranks an OA PDF; the resolver must say so.
+                oa_format = oa.file_format or "pdf"
                 sources.append(
                     CandidateSource(
                         provider=oa.source or "openalex",
                         service="oa_download",
-                        format="pdf",
+                        format=oa_format,
                         # Free access outranks everything: it costs no quota.
                         quality=QUALITY["xml"] + 50,
                         reason="open-access copy (no institutional quota used)",

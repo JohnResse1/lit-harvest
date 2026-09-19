@@ -36,6 +36,44 @@ providers:
         pdf_daily_limit: null
 
     # ------------------------------------------------------------------
+    # Crossref: key-free DOI metadata + publisher-registered TDM links.
+    # Supplying a contact email puts requests in the polite pool.
+    # ------------------------------------------------------------------
+    crossref:
+      enabled: true
+      contact_email: null
+      policy:
+        search_min_interval_seconds: 1
+        search_daily_limit: 1000
+        fulltext_daily_limit: null
+        pdf_daily_limit: null
+
+    # ------------------------------------------------------------------
+    # Unpaywall: key-free DOI -> open-access locations (green copies).
+    # Requires contact_email; stays inert without one.
+    # ------------------------------------------------------------------
+    unpaywall:
+      enabled: true
+      contact_email: null
+      policy:
+        search_min_interval_seconds: 1
+        search_daily_limit: 1000
+        fulltext_daily_limit: null
+        pdf_daily_limit: null
+
+    # ------------------------------------------------------------------
+    # Europe PMC: key-free life-science search + OA JATS full text.
+    # Structured XML costs no institutional subscription quota.
+    # ------------------------------------------------------------------
+    europepmc:
+      enabled: true
+      policy:
+        search_min_interval_seconds: 1
+        search_daily_limit: 1000
+        fulltext_daily_limit: null
+        pdf_daily_limit: null
+
+    # ------------------------------------------------------------------
     # Springer Nature: Meta API (search + metadata) and OpenAccess API.
     # Each API uses its own key, hence the per-service allowlist.
     # ------------------------------------------------------------------

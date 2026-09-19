@@ -649,6 +649,38 @@ def parse(
 
 
 @app.command()
+def formats(
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Survey the formats your sources actually return.
+
+    Shows a breakdown of successful downloads by provider, service, and format so
+    you can see what a corpus is made of (structured XML vs HTML vs PDF) before
+    deciding which parser to prioritize.
+    """
+    container = _container(config)
+    census = container.database.format_census()
+    if not census:
+        console.print(
+            "[dim]No completed downloads yet. Fetch some papers, then run this again.[/dim]"
+        )
+        return
+    table = Table(title="Downloaded document formats")
+    table.add_column("Provider")
+    table.add_column("Service")
+    table.add_column("Format")
+    table.add_column("Count", justify="right")
+    for row in census:
+        table.add_row(row["provider"], row["service"], row["format"], str(row["count"]))
+    console.print(table)
+    total = sum(row["count"] for row in census)
+    console.print(
+        f"[dim]{total} completed download(s) across "
+        f"{len(census)} source/format combination(s).[/dim]"
+    )
+
+
+@app.command()
 def enrich(
     limit: Annotated[int, typer.Option("--limit", min=1)] = 100,
     all_papers: Annotated[

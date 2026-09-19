@@ -36,6 +36,7 @@ from sqlalchemy.orm import (
 
 from lit_harvest.models.document import PaperDocument
 from lit_harvest.models.enums import (
+    DownloadStatus,
     HealthStatus,
     JobStatus,
     PaperStage,
@@ -483,6 +484,7 @@ class Database:
                 "eid",
                 "pii",
                 "pmid",
+                "pmcid",
                 "openalex_id",
                 "semantic_scholar_id",
             }:
@@ -721,6 +723,37 @@ class Database:
                 .order_by(DownloadRow.acquired_at.asc())
             ).all()
             return [self._download_dict(row) for row in rows]
+
+    def format_census(self) -> list[dict[str, Any]]:
+        """How many successful downloads exist per (provider, service, format).
+
+        This is the data behind the format survey: it shows which formats the
+        enabled sources actually return before any parser work is prioritized.
+        """
+        with self.session() as session:
+            statement = (
+                select(
+                    DownloadRow.provider,
+                    DownloadRow.service,
+                    DownloadRow.format,
+                    # Not `label("count")`: on a Row, `.count` resolves to
+                    # tuple.count, not the column.
+                    func.count().label("total"),
+                )
+                .where(DownloadRow.status == DownloadStatus.SUCCESS.value)
+                .group_by(DownloadRow.provider, DownloadRow.service, DownloadRow.format)
+                .order_by(func.count().desc())
+            )
+            rows = session.execute(statement).all()
+        return [
+            {
+                "provider": row.provider,
+                "service": row.service,
+                "format": row.format,
+                "count": int(row.total),
+            }
+            for row in rows
+        ]
 
     @staticmethod
     def _download_dict(row: DownloadRow) -> dict[str, Any]:

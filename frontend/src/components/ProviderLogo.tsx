@@ -14,6 +14,7 @@ type Brand = {
 const BRANDS: Record<string, Brand> = {
   elsevier: { mark: "EL", background: "#ff6d00", foreground: "#ffffff" },
   openalex: { mark: "OA", background: "#1f6feb", foreground: "#ffffff" },
+  europepmc: { mark: "EP", background: "#0a7c66", foreground: "#ffffff" },
   springer: { mark: "SN", background: "#0b7285", foreground: "#ffffff" },
   crossref: { mark: "CR", background: "#2f6f4f", foreground: "#ffffff" },
   arxiv: { mark: "AX", background: "#b31b1b", foreground: "#ffffff" },

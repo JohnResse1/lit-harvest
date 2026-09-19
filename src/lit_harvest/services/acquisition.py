@@ -479,6 +479,9 @@ class AcquisitionService:
                     paper_id=paper.id,
                     source_path=str(raw_path),
                     http_status=raw_download.get("http_status"),
+                    provider=str(raw_download.get("provider") or "") or None,
+                    service=str(raw_download.get("service") or "") or None,
+                    format=str(raw_download.get("format") or "xml"),
                     pdf_path=str(path),
                 )
         return {"paper_id": paper.id, "doi": paper.doi, "pdf_path": str(path), "reused": False}
@@ -488,8 +491,11 @@ class AcquisitionService:
 
         Failure here is never fatal: the caller falls back to the publisher.
         """
-        if self.config.providers.all().get("openalex") is not None and not getattr(
-            self.config.providers.get("openalex"), "enabled", False
+        # OA-first routing is only meaningful when at least one OA-capable
+        # provider (OpenAlex, Unpaywall, Europe PMC, ...) is enabled.
+        if not any(
+            getattr(provider, "supports_oa_lookup", False)
+            for provider in self.providers.with_capability("supports_oa_lookup")
         ):
             return None
         try:
@@ -555,9 +561,13 @@ class AcquisitionService:
         )
         self.database.set_paper_stage(paper.id, PaperStage.DOWNLOADED)
 
-        # Only structured documents can be normalized deterministically.
+        # Normalize whatever deterministic parser can handle the payload
+        # (JATS/Elsevier XML, HTML, or a PDF text layer). OCR is never run.
         normalized_path: str | None = None
-        if payload["format"] in {"xml", "html"}:
+        document: dict[str, Any] | None = None
+        if self.normalization.can_normalize(
+            format=payload["format"], content=payload["content"]
+        ):
             try:
                 normalized = self.normalization.normalize(
                     content=payload["content"],
@@ -566,8 +576,12 @@ class AcquisitionService:
                     source_path=str(raw_path),
                     credential_label=None,
                     http_status=payload["http_status"],
+                    provider=oa.source or "openaccess",
+                    service="oa_download",
+                    format=payload["format"],
                 )
                 normalized_path = str(normalized["path"])
+                document = normalized["document"]
             except Exception as exc:  # noqa: BLE001 - raw file is still valuable
                 logger.info("OA document for %s could not be normalized: %s", doi, exc)
         return FetchResult(
@@ -576,7 +590,7 @@ class AcquisitionService:
             raw_path=str(raw_path),
             normalized_path=normalized_path,
             reused=False,
-            document=None,
+            document=document,
         )
 
     def _provider_for_fetch(self, job: Job, doi: str) -> Any:
@@ -775,6 +789,9 @@ class AcquisitionService:
                 source_path=str(raw_path),
                 credential_label=result.credential.name if result.credential else None,
                 http_status=result.http_status,
+                provider=result.provider,
+                service=result.service,
+                format=result.format,
             )
         except Exception as exc:
             self.database.record_event(
@@ -847,6 +864,9 @@ class AcquisitionService:
                     paper_id=paper.id,
                     source_path=str(raw_path),
                     http_status=download.get("http_status"),
+                    provider=str(download.get("provider") or "") or None,
+                    service=str(download.get("service") or "") or None,
+                    format=str(download.get("format") or "xml"),
                     pdf_path=str(pdf_path) if pdf_path else None,
                 )
                 processed += 1

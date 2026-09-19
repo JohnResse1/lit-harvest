@@ -110,6 +110,9 @@ DEFAULT_SERVICES: dict[str, list[str]] = {
     "elsevier": ["scopus_search", "article_retrieval", "article_pdf"],
     "openalex": ["works_search", "works_lookup"],
     "springer": ["springer_meta", "springer_openaccess"],
+    "crossref": ["crossref_search", "crossref_lookup"],
+    "unpaywall": ["oa_lookup"],
+    "europepmc": ["europepmc_search", "europepmc_fulltext"],
 }
 
 
@@ -169,6 +172,46 @@ class SpringerConfig(ProviderConfig):
         default_factory=lambda: {
             "springer_meta": ServiceConfig(),
             "springer_openaccess": ServiceConfig(),
+        }
+    )
+
+
+class CrossrefConfig(ProviderConfig):
+    """Crossref defaults. Key-free; an optional email joins the polite pool."""
+
+    base_url: str = "https://api.crossref.org"
+    contact_email: str | None = None
+    services: dict[str, ServiceConfig] = Field(
+        default_factory=lambda: {
+            "crossref_search": ServiceConfig(),
+            "crossref_lookup": ServiceConfig(),
+        }
+    )
+
+
+class UnpaywallConfig(ProviderConfig):
+    """Unpaywall defaults.
+
+    Unpaywall needs no key but does ask callers to identify themselves with a
+    contact email, so the provider stays inert until one is configured.
+    """
+
+    base_url: str = "https://api.unpaywall.org"
+    contact_email: str | None = None
+    services: dict[str, ServiceConfig] = Field(
+        default_factory=lambda: {"oa_lookup": ServiceConfig()}
+    )
+
+
+class EuropePmcConfig(ProviderConfig):
+    """Europe PMC defaults: key-free search plus open-access JATS full text."""
+
+    base_url: str = "https://www.ebi.ac.uk/europepmc/webservices/rest"
+    contact_email: str | None = None
+    services: dict[str, ServiceConfig] = Field(
+        default_factory=lambda: {
+            "europepmc_search": ServiceConfig(),
+            "europepmc_fulltext": ServiceConfig(),
         }
     )
 

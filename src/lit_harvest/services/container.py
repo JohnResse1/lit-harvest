@@ -8,10 +8,13 @@ from typing import Any
 from lit_harvest.config import AppConfig, ProviderConfig, load_config
 from lit_harvest.credentials.manager import CredentialManager
 from lit_harvest.policy import PolicyService, ProviderPolicy
+from lit_harvest.providers.crossref import CrossrefProvider
 from lit_harvest.providers.elsevier import ElsevierProvider
+from lit_harvest.providers.europepmc import EuropePmcProvider
 from lit_harvest.providers.openalex import OpenAlexProvider
 from lit_harvest.providers.registry import ProviderRegistry
 from lit_harvest.providers.springer import SpringerProvider
+from lit_harvest.providers.unpaywall import UnpaywallProvider
 from lit_harvest.quotas.manager import QuotaManager
 from lit_harvest.scheduler.queue import QueueControl
 from lit_harvest.scheduler.scheduler import Scheduler
@@ -102,6 +105,9 @@ class ServiceContainer:
             "elsevier": self._build_elsevier,
             "openalex": self._build_openalex,
             "springer": self._build_springer,
+            "crossref": self._build_crossref,
+            "unpaywall": self._build_unpaywall,
+            "europepmc": self._build_europepmc,
         }
         for name, provider_config in self.config.providers.all().items():
             if not provider_config.enabled:
@@ -146,12 +152,42 @@ class ServiceContainer:
             policy=self.policy,
         )
 
+    def _build_crossref(self, provider_config: ProviderConfig) -> CrossrefProvider:
+        return CrossrefProvider(
+            database=self.database,
+            contact_email=provider_config.contact_email,
+            timeout_seconds=provider_config.timeout_seconds,
+            max_attempts=self.config.scheduler.retry.max_attempts,
+            policy=self.policy,
+        )
+
+    def _build_unpaywall(self, provider_config: ProviderConfig) -> UnpaywallProvider:
+        return UnpaywallProvider(
+            database=self.database,
+            contact_email=provider_config.contact_email,
+            timeout_seconds=provider_config.timeout_seconds,
+            max_attempts=self.config.scheduler.retry.max_attempts,
+            policy=self.policy,
+        )
+
+    def _build_europepmc(self, provider_config: ProviderConfig) -> EuropePmcProvider:
+        return EuropePmcProvider(
+            database=self.database,
+            contact_email=provider_config.contact_email,
+            timeout_seconds=provider_config.timeout_seconds,
+            max_attempts=self.config.scheduler.retry.max_attempts,
+            policy=self.policy,
+        )
+
     def _sync_providers(self) -> None:
         """Register provider/service rows and credential metadata in SQLite."""
         display_names = {
             "elsevier": "Elsevier",
             "openalex": "OpenAlex",
             "springer": "Springer Nature",
+            "crossref": "Crossref",
+            "unpaywall": "Unpaywall",
+            "europepmc": "Europe PMC",
         }
         for name, provider_config in self.config.providers.all().items():
             services = [

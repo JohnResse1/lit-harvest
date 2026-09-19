@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE article PUBLIC "-//NLM//DTD JATS (Z39.96) Journal Archiving and Interchange DTD with MathML3 v1.4 20241031//EN" "JATS-archivearticle1-4-mathml3.dtd">
+<article article-type="research-article" xml:lang="en" dtd-version="1.4">
+  <front>
+    <journal-meta>
+      <journal-id journal-id-type="nlm-ta">J Test Mater</journal-id>
+      <journal-title-group>
+        <journal-title>Journal of Test Materials</journal-title>
+      </journal-title-group>
+      <issn pub-type="epub">1234-5678</issn>
+      <publisher><publisher-name>Test Publishers</publisher-name></publisher>
+    </journal-meta>
+    <article-meta>
+      <article-id pub-id-type="doi">10.1234/jtm.2026.001</article-id>
+      <article-id pub-id-type="pmid">12345678</article-id>
+      <article-id pub-id-type="pmcid">PMC9999999</article-id>
+      <article-id pub-id-type="publisher-id">JTM-2026-001</article-id>
+      <title-group>
+        <article-title>Solid-state battery interfaces under thermal cycling</article-title>
+      </title-group>
+      <contrib-group>
+        <contrib contrib-type="author">
+          <name><surname>Li</surname><given-names>Wei</given-names></name>
+          <contrib-id contrib-id-type="orcid">0000-0002-1234-5678</contrib-id>
+          <xref ref-type="aff" rid="aff1"/>
+          <email>wei.li@example.org</email>
+        </contrib>
+        <contrib contrib-type="author">
+          <name><surname>Garcia</surname><given-names>Ana</given-names></name>
+          <xref ref-type="aff" rid="aff2"/>
+        </contrib>
+      </contrib-group>
+      <aff id="aff1">
+        <institution>Harbin Institute of Technology</institution>
+        <city>Harbin</city><country>China</country>
+      </aff>
+      <aff id="aff2">
+        <institution>Test University</institution>
+        <city>Boston</city><country>USA</country>
+      </aff>
+      <pub-date pub-type="received"><year>2026</year><month>01</month><day>02</day></pub-date>
+      <pub-date pub-type="accepted"><year>2026</year><month>02</month><day>11</day></pub-date>
+      <pub-date pub-type="epub"><year>2026</year><month>02</month><day>12</day></pub-date>
+      <volume>42</volume>
+      <issue>3</issue>
+      <elocation-id>115551</elocation-id>
+      <abstract>
+        <p>Thermal cycling destabilizes solid-state battery interfaces.</p>
+      </abstract>
+      <kwd-group>
+        <kwd>solid-state battery</kwd>
+        <kwd>interface</kwd>
+      </kwd-group>
+      <permissions>
+        <license license-type="open-access">
+          <license-p>CC BY 4.0</license-p>
+        </license>
+      </permissions>
+    </article-meta>
+  </front>
+  <body>
+    <sec id="sec1">
+      <title>Introduction</title>
+      <p>Solid-state batteries promise higher energy density.</p>
+      <sec id="sec1-1">
+        <title>Background</title>
+        <p>Interface resistance limits performance.</p>
+      </sec>
+    </sec>
+    <sec id="sec2">
+      <title>Results</title>
+      <p>Resistance rose after 100 cycles.</p>
+      <table-wrap id="tbl1">
+        <label>Table 1</label>
+        <caption><p>Measured resistance</p></caption>
+        <table>
+          <tr><th>Sample</th><th>Value</th></tr>
+          <tr><td>A</td><td>3.2</td></tr>
+        </table>
+      </table-wrap>
+      <disp-formula id="eq1">
+        <label>(1)</label>
+        <mml:math xmlns:mml="http://www.w3.org/1998/Math/MathML"><mml:mi>R</mml:mi></mml:math>
+      </disp-formula>
+    </sec>
+  </body>
+  <back>
+    <ref-list>
+      <ref id="ref1">
+        <label>1</label>
+        <mixed-citation>Prior work.</mixed-citation>
+        <pub-id pub-id-type="doi">10.1000/ref</pub-id>
+      </ref>
+    </ref-list>
+  </back>
+</article>

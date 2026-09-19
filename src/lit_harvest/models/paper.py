@@ -16,6 +16,7 @@ class PaperIdentifiers(BaseModel):
     eid: str | None = None
     pii: str | None = None
     pmid: str | None = None
+    pmcid: str | None = None
     openalex_id: str | None = None
     semantic_scholar_id: str | None = None
     publisher_specific: dict[str, str] = Field(default_factory=dict)
@@ -28,6 +29,7 @@ class PaperIdentifiers(BaseModel):
             "eid",
             "pii",
             "pmid",
+            "pmcid",
             "openalex_id",
             "semantic_scholar_id",
         )

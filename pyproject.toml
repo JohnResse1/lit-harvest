@@ -16,6 +16,7 @@ dependencies = [
   "keyring>=25,<26",
   "lxml>=5.2,<7",
   "pydantic>=2.8,<3",
+  "pypdf>=5,<6",
   "PyYAML>=6.0,<7",
   "python-multipart>=0.0.9,<1",
   "SQLAlchemy>=2.0,<3",
