@@ -29,6 +29,17 @@ def _requires_hosted_record(provider: Any) -> bool:
     return bool(getattr(provider, "fulltext_requires_hosted_record", False))
 
 
+def _split_by_hosted_record(
+    providers: list[Any],
+) -> tuple[list[Any], list[Any]]:
+    """Partition providers into (can attempt any DOI, hosted-record only)."""
+    can_attempt: list[Any] = []
+    hosted_only: list[Any] = []
+    for provider in providers:
+        (hosted_only if _requires_hosted_record(provider) else can_attempt).append(provider)
+    return can_attempt, hosted_only
+
+
 @dataclass(slots=True)
 class CandidateSource:
     """One way a DOI could legitimately be obtained."""
@@ -223,7 +234,13 @@ class Resolver:
                     )
                 )
 
-        for provider in self.providers.fulltext_providers():
+        fulltext = list(self.providers.fulltext_providers())
+        # An unconditional publisher route can serve any entitled DOI, so it
+        # outranks a provider that can only serve records it already hosts
+        # (Europe PMC). The latter stays as a lower-ranked best-effort fallback
+        # rather than being described as an authoritative publisher route.
+        can_attempt, conditional = _split_by_hosted_record(fulltext)
+        for provider in can_attempt:
             sources.append(
                 CandidateSource(
                     provider=provider.name,
@@ -231,6 +248,17 @@ class Resolver:
                     format="xml",
                     quality=QUALITY["xml"],
                     reason="publisher structured full text",
+                )
+            )
+        for provider in conditional:
+            sources.append(
+                CandidateSource(
+                    provider=provider.name,
+                    service=getattr(provider, "fulltext_service", "article_retrieval"),
+                    format="xml",
+                    # Below a real publisher route, above nothing.
+                    quality=QUALITY["xml"] - 10,
+                    reason="hosted open-access full text (only for indexed records)",
                 )
             )
         if want_pdf:

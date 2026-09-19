@@ -640,3 +640,24 @@ def test_crossref_search_requests_score_sort(database: Database) -> None:
 
     assert captured[0]["sort"] == "score"
     assert captured[0]["order"] == "desc"
+
+
+def test_hosted_record_candidate_ranks_below_publisher_route(
+    database: Database,
+) -> None:
+    """A hosted-record provider must be labelled and ranked honestly."""
+    epmc = EuropePmcProvider(database=database)
+
+    class Publisher:
+        name = "elsevier"
+        display_name = "Elsevier"
+        supports_fulltext = True
+        fulltext_service = "article_retrieval"
+
+    candidates = Resolver(ProviderRegistry([epmc, Publisher()])).candidates(
+        "10.1016/j.mtcomm.2026.115551", prefer_oa=False
+    )
+    by_provider = {item.provider: item for item in candidates}
+    assert by_provider["elsevier"].quality > by_provider["europepmc"].quality
+    # It must not claim to be an authoritative publisher full-text route.
+    assert "publisher" not in by_provider["europepmc"].reason
