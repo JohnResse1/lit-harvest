@@ -375,7 +375,7 @@ lit-harvest auth list   [--config PATH]
 lit-harvest auth test   [provider] [name] [--config PATH]
 lit-harvest auth remove [provider] [name] [--secret-ref REF] [--config PATH]
 
-lit-harvest search --query QUERY --max-results N [--provider elsevier|openalex]
+lit-harvest search --query QUERY --max-results N [--provider elsevier|openalex|springer]
                    [--start-year N] [--end-year N] [--export PATH]
                    [--download-session SESSION_ID] [--config PATH]
 lit-harvest fetch-session SESSION_ID [--pdf] [--config PATH]
@@ -706,10 +706,34 @@ GET    /api/credentials/{provider}/selection
 
 本工具把**检索**和**全文获取**分开，因为几乎没有几家出版社提供检索 API。
 
-| 提供商 | 检索 | 全文 | PDF | 凭证 |
-| --- | --- | --- | --- | --- |
-| **OpenAlex** | ✅ | – | – | **无需任何凭证** |
-| **Elsevier** | ✅（Scopus） | ✅（ScienceDirect） | ✅ | 需要 API Key |
+| 提供商 | 检索 | 全文 | PDF | OA 查询 | 凭证 |
+| --- | --- | --- | --- | --- | --- |
+| **OpenAlex** | ✅ | – | – | ✅ | **无需任何凭证** |
+| **Springer Nature** | ✅ | – | – | ✅ | 两把 Key（Meta + OpenAccess） |
+| **Elsevier** | ✅（Scopus） | ✅（ScienceDirect） | ✅ | – | 需要 API Key |
+
+Springer 的两个 API **各用一把独立密钥**。凭证可以声明自己服务哪个接口，密钥池会正确配对：
+
+```yaml
+providers:
+  entries:
+    springer:
+      enabled: true
+      credentials:
+        - name: meta
+          secret_ref: file:springer:meta
+          services: [springer_meta]
+        - name: openaccess
+          secret_ref: file:springer:openaccess
+          services: [springer_openaccess]
+```
+
+```bash
+lit-harvest search --provider springer --query 'solid-state battery' --max-results 20
+```
+
+Springer 的 Meta API 提供完整摘要和作者列表；对开放获取文章还会给出出版商托管的 PDF 链接，
+可由 OA 下载器直接获取，不消耗任何订阅配额。
 
 ### OpenAlex（无需 Key）
 
@@ -950,7 +974,10 @@ database:
 
 - 提供商抽象 · 凭证管理 · 配额管理
 - 持久化调度器 · SQLite 状态 · 原始存储 · DOI 导入
-- Scopus Search `STANDARD` · ScienceDirect `FULL` XML · 可选 PDF 附件
+- Elsevier：Scopus Search `STANDARD` · ScienceDirect `FULL` XML · 可选 PDF 附件
+- OpenAlex：无需 Key 的跨出版社检索、摘要与 OA 位置
+- Springer Nature：Meta API 检索 + OpenAccess PDF 位置
+- OA 优先路由：有免费副本时不消耗机构配额
 - Elsevier FULL XML 确定性规范化
 - Typer CLI · FastAPI · 双语 React 面板 · SSE
 - 暂停 / 恢复 / 重试 / 取消 · API 泄漏扫描 · CI
@@ -960,7 +987,7 @@ database:
 | 版本 | 重点 |
 | --- | --- |
 | `v0.2` | OpenAlex、Crossref、Unpaywall 元数据/开放获取补充 |
-| `v0.3` | Springer Nature、Wiley、ACS、RSC（需先确认官方 API 与许可） |
+| `v0.3` | Wiley、ACS、RSC、IEEE（需先确认官方 API 与许可） |
 | `v0.4+` | 科学信息抽取 → 知识图谱 → 研究态势分析 |
 
 **v0.1 明确不做**

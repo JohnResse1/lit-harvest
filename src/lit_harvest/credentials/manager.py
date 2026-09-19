@@ -45,6 +45,7 @@ class CredentialManager:
                     institution=item.institution,
                     quota_scope=scope,
                     enabled=item.enabled,
+                    services=item.services or None,
                 )
                 ids.append(credential_id)
         return ids
@@ -70,6 +71,7 @@ class CredentialManager:
                 health_status=item["health_status"],
                 last_checked_at=item["last_checked_at"],
                 secret_available=self.secrets.exists(item["secret_ref"]),
+                services=[str(x) for x in (item.get("services") or [])],
                 priority=int(item.get("priority") or 100),
                 last_used_at=item.get("last_used_at"),
                 use_count=int(item.get("use_count") or 0),
@@ -138,6 +140,9 @@ class CredentialManager:
             ):
                 continue
             if credential.health_status == HealthStatus.UNHEALTHY:
+                continue
+            if credential.services and service not in credential.services:
+                # Provider issues separate keys per API (e.g. Springer Meta vs OA).
                 continue
             if self._is_blocked(provider, service, credential):
                 continue

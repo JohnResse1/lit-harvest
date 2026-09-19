@@ -11,6 +11,7 @@ from lit_harvest.policy import PolicyService, ProviderPolicy
 from lit_harvest.providers.elsevier import ElsevierProvider
 from lit_harvest.providers.openalex import OpenAlexProvider
 from lit_harvest.providers.registry import ProviderRegistry
+from lit_harvest.providers.springer import SpringerProvider
 from lit_harvest.quotas.manager import QuotaManager
 from lit_harvest.scheduler.queue import QueueControl
 from lit_harvest.scheduler.scheduler import Scheduler
@@ -100,6 +101,7 @@ class ServiceContainer:
         factories: dict[str, Callable[[ProviderConfig], Any]] = {
             "elsevier": self._build_elsevier,
             "openalex": self._build_openalex,
+            "springer": self._build_springer,
         }
         for name, provider_config in self.config.providers.all().items():
             if not provider_config.enabled:
@@ -134,9 +136,23 @@ class ServiceContainer:
             policy=self.policy,
         )
 
+    def _build_springer(self, provider_config: ProviderConfig) -> SpringerProvider:
+        return SpringerProvider(
+            database=self.database,
+            credentials=self.credentials,
+            quotas=self.quotas,
+            timeout_seconds=provider_config.timeout_seconds,
+            max_attempts=self.config.scheduler.retry.max_attempts,
+            policy=self.policy,
+        )
+
     def _sync_providers(self) -> None:
         """Register provider/service rows and credential metadata in SQLite."""
-        display_names = {"elsevier": "Elsevier", "openalex": "OpenAlex"}
+        display_names = {
+            "elsevier": "Elsevier",
+            "openalex": "OpenAlex",
+            "springer": "Springer Nature",
+        }
         for name, provider_config in self.config.providers.all().items():
             services = [
                 (service_name, service.enabled)

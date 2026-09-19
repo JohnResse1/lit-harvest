@@ -36,6 +36,7 @@ class PoolEntry:
     enabled: bool
     health: str
     secret_available: bool
+    services: list[str]
     priority: int
     last_used_at: str | None
     use_count: int
@@ -54,6 +55,7 @@ class PoolEntry:
             "enabled": self.enabled,
             "health": self.health,
             "secret_available": self.secret_available,
+            "services": self.services,
             "priority": self.priority,
             "last_used_at": self.last_used_at,
             "use_count": self.use_count,
@@ -91,6 +93,7 @@ class CredentialPoolService:
                     enabled=bool(row.get("enabled")),
                     health=row.get("health_status") or "unknown",
                     secret_available=self.secrets.exists(row["secret_ref"]),
+                    services=[str(x) for x in (row.get("services") or [])],
                     priority=int(row.get("priority") or 100),
                     last_used_at=(
                         row["last_used_at"].isoformat() if row.get("last_used_at") else None
@@ -116,6 +119,7 @@ class CredentialPoolService:
         priority: int = 100,
         notes: str | None = None,
         enabled: bool = True,
+        services: list[str] | None = None,
     ) -> PoolEntry:
         """Add or update a credential. The secret is never returned."""
         if not provider.strip() or not name.strip():
@@ -144,6 +148,7 @@ class CredentialPoolService:
             enabled=enabled,
             notes=notes,
             priority=priority,
+            services=services,
         )
         return next(
             item for item in self._entries_for(provider) if item.credential_id == credential_id

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from lit_harvest.models.enums import AuthType, HealthStatus, QuotaScope
 
@@ -22,6 +22,7 @@ class Credential(BaseModel):
     health_status: HealthStatus = HealthStatus.UNKNOWN
     last_checked_at: datetime | None = None
     secret_available: bool = False
+    services: list[str] = Field(default_factory=list)
     priority: int = 100
     last_used_at: datetime | None = None
     use_count: int = 0

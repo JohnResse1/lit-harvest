@@ -194,6 +194,7 @@ class CredentialRow(Base):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Pool bookkeeping: least-recently-used selection and labels for the UI.
     notes: Mapped[str | None] = mapped_column(Text)
+    services_json: Mapped[str] = mapped_column(Text, default="[]")
     priority: Mapped[int] = mapped_column(Integer, default=100)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     use_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -284,6 +285,7 @@ class Database:
         additions: dict[str, dict[str, str]] = {
             "credentials": {
                 "notes": "TEXT",
+                "services_json": "TEXT DEFAULT '[]'",
                 "priority": "INTEGER DEFAULT 100",
                 "last_used_at": "DATETIME",
                 "use_count": "INTEGER DEFAULT 0",
@@ -861,6 +863,7 @@ class Database:
         enabled: bool = True,
         notes: str | None = None,
         priority: int = 100,
+        services: list[str] | None = None,
     ) -> str:
         with self.session() as session:
             row = session.scalar(
@@ -885,6 +888,8 @@ class Database:
             row.enabled = enabled
             if notes is not None:
                 row.notes = notes
+            if services is not None:
+                row.services_json = json.dumps(sorted(set(services)))
             row.priority = priority
             # A changed secret or a newly configured credential must be eligible again.
             if previous_ref != secret_ref or row.health_status == HealthStatus.UNHEALTHY.value:
@@ -955,6 +960,7 @@ class Database:
                     "health_status": row.health_status,
                     "last_checked_at": aware(row.last_checked_at),
                     "notes": row.notes,
+                    "services": _json_load(row.services_json, []),
                     "priority": row.priority,
                     "last_used_at": aware(row.last_used_at),
                     "use_count": row.use_count,

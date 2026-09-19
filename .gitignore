@@ -58,3 +58,14 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Config and secret backups (easy to create accidentally)
+config*.bak
+config*.backup
+config*.old
+config*.tmp
+config*.orig
+*.secret
+*.secrets
+secrets*.json
+.env*.bak

@@ -60,6 +60,9 @@ class ServerConfig(BaseModel):
 class CredentialConfig(BaseModel):
     name: str
     secret_ref: str | None = None
+    # Which services this credential may serve. Empty means "any service".
+    # Needed when one provider issues separate keys per API (e.g. Springer).
+    services: list[str] = Field(default_factory=list)
     api_key_env: str | None = None
     institution: str | None = None
     account_label: str | None = None
@@ -134,6 +137,22 @@ class OpenAlexConfig(ProviderConfig):
         default_factory=lambda: {
             "works_search": ServiceConfig(),
             "works_lookup": ServiceConfig(),
+        }
+    )
+
+
+class SpringerConfig(ProviderConfig):
+    """Springer Nature defaults.
+
+    Springer issues separate keys for the Meta and OpenAccess APIs, which is why
+    credentials can declare a `services` allowlist.
+    """
+
+    base_url: str = "https://api.springernature.com"
+    services: dict[str, ServiceConfig] = Field(
+        default_factory=lambda: {
+            "springer_meta": ServiceConfig(),
+            "springer_openaccess": ServiceConfig(),
         }
     )
 

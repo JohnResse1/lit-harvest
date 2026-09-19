@@ -46,9 +46,15 @@ publisher structured XML (100)  >  structured HTML (80)  >  PDF (60)
 
 Current shape:
 
-| Provider | search | fulltext | pdf | notes |
-| --- | --- | --- | --- | --- |
-| Elsevier | yes | yes | yes | Scopus Search `STANDARD` + ScienceDirect `FULL` |
+| Provider | search | fulltext | pdf | oa lookup | notes |
+| --- | --- | --- | --- | --- | --- |
+| Elsevier | yes | yes | yes | – | Scopus Search `STANDARD` + ScienceDirect `FULL` |
+| OpenAlex | yes | – | – | yes | key-free, cross-publisher, CC0 metadata |
+| Springer Nature | yes | – | – | yes | Meta API + OpenAccess API, one key each |
+
+A credential may declare a `services` allowlist. This exists because some providers issue a separate
+key per API (Springer Meta vs OpenAlex-style OpenAccess); the pool then pairs each service with the
+correct key instead of using them interchangeably.
 
 Adding a provider means implementing the protocol and registering a factory in
 `ServiceContainer._build_providers`. The resolver, acquisition service, scheduler, and API do not

@@ -36,6 +36,25 @@ providers:
         pdf_daily_limit: null
 
     # ------------------------------------------------------------------
+    # Springer Nature: Meta API (search + metadata) and OpenAccess API.
+    # Each API uses its own key, hence the per-service allowlist.
+    # ------------------------------------------------------------------
+    springer:
+      enabled: false
+      policy:
+        search_min_interval_seconds: 1
+        search_daily_limit: 2000
+        fulltext_daily_limit: null
+        pdf_daily_limit: null
+      credentials:
+        - name: meta
+          secret_ref: file:springer:meta
+          services: [springer_meta]
+        - name: openaccess
+          secret_ref: file:springer:openaccess
+          services: [springer_openaccess]
+
+    # ------------------------------------------------------------------
     # Elsevier: Scopus Search STANDARD + ScienceDirect FULL XML / PDF.
     # Requires your own API key: lit-harvest auth set elsevier university_primary
     # ------------------------------------------------------------------

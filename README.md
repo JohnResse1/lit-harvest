@@ -384,7 +384,7 @@ lit-harvest auth list   [--config PATH]
 lit-harvest auth test   [provider] [name] [--config PATH]
 lit-harvest auth remove [provider] [name] [--secret-ref REF] [--config PATH]
 
-lit-harvest search --query QUERY --max-results N [--provider elsevier|openalex]
+lit-harvest search --query QUERY --max-results N [--provider elsevier|openalex|springer]
                    [--start-year N] [--end-year N] [--export PATH]
                    [--download-session SESSION_ID] [--config PATH]
 lit-harvest fetch-session SESSION_ID [--pdf] [--config PATH]
@@ -740,10 +740,36 @@ GET    /api/credentials/{provider}/selection
 Literature Harvester separates **discovery** from **full-text retrieval**, because few publishers
 offer a search API at all.
 
-| Provider | Search | Full text | PDF | Credentials |
-| --- | --- | --- | --- | --- |
-| **OpenAlex** | yes | – | – | **none required** |
-| **Elsevier** | yes (Scopus) | yes (ScienceDirect) | yes | API key |
+| Provider | Search | Full text | PDF | OA lookup | Credentials |
+| --- | --- | --- | --- | --- | --- |
+| **OpenAlex** | yes | – | – | yes | **none required** |
+| **Springer Nature** | yes | – | – | yes | 2 keys (Meta + OpenAccess) |
+| **Elsevier** | yes (Scopus) | yes (ScienceDirect) | yes | – | API key |
+
+Springer issues **separate keys per API**. Each credential declares which services it may serve, so
+the pool pairs them correctly:
+
+```yaml
+providers:
+  entries:
+    springer:
+      enabled: true
+      credentials:
+        - name: meta
+          secret_ref: file:springer:meta
+          services: [springer_meta]
+        - name: openaccess
+          secret_ref: file:springer:openaccess
+          services: [springer_openaccess]
+```
+
+```bash
+lit-harvest search --provider springer --query 'solid-state battery' --max-results 20
+```
+
+Springer's Meta API returns full abstracts and author lists, and for open-access records it exposes a
+publisher-hosted PDF URL that the open-access fetcher can download without using any subscription
+quota.
 
 ### OpenAlex (no key required)
 
@@ -994,7 +1020,10 @@ Rebuild the bilingual frontend:
 
 - Provider abstraction · credential manager · quota manager
 - Persistent scheduler · SQLite state · raw storage · DOI import
-- Scopus Search `STANDARD` · ScienceDirect `FULL` XML · optional PDF attachment
+- Elsevier: Scopus Search `STANDARD` · ScienceDirect `FULL` XML · optional PDF attachment
+- OpenAlex: key-free cross-publisher discovery, abstracts, and OA locations
+- Springer Nature: Meta API search + OpenAccess PDF locations
+- Open-access-first routing that avoids institutional quota when a free copy exists
 - Deterministic FULL XML normalization
 - Typer CLI · FastAPI · bilingual React dashboard · SSE
 - Pause / resume / retry / cancel · secret-leak scanner · CI
@@ -1004,7 +1033,7 @@ Rebuild the bilingual frontend:
 | Version | Focus |
 | --- | --- |
 | `v0.2` | OpenAlex, Crossref, Unpaywall enrichment |
-| `v0.3` | Springer Nature, Wiley, ACS, RSC (after official API/entitlement review) |
+| `v0.3` | Wiley, ACS, RSC, IEEE (after official API/entitlement review) |
 | `v0.4+` | Scientific extraction → knowledge graph → landscape analysis |
 
 **Explicitly out of scope for v0.1**
