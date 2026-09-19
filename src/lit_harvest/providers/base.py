@@ -132,6 +132,8 @@ class Provider(Protocol):
     supports_metadata: bool = False
     # Can this provider tell us where a free (open access) copy lives?
     supports_oa_lookup: bool = False
+    # Some providers are key-free (OpenAlex); the UI should not ask for a key.
+    requires_credential: bool = True
 
     def healthcheck(
         self, service: str | None = None, *, network: bool = True

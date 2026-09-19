@@ -675,21 +675,36 @@ lit-harvest policy show
 
 「最久未使用优先」会把负载分散到多个凭证，而不是耗尽其中一个。
 
-### 在面板中管理密钥
+### 在面板中添加密钥
 
-打开「**API 池**」即可新增、禁用、删除凭证。每个提供商会显示一个自绘字母徽标
-（出版社 logo 是注册商标，本项目不分发）。
+打开「**API 池**」页面。提供商列表由后端目录接口提供，因此只会显示当前版本真正支持的出版社。
 
 | 字段 | 用途 |
 | --- | --- |
-| 提供商 | `elsevier`、`openalex`、`springer`、`crossref`、`arxiv`、`pubmed`、`unpaywall` |
+| 提供商 | 只列出已实现的出版社 |
 | 名称 | 内部标识，例如 `university_primary` |
 | API Key | 只写不读；仅存本机，保存后不再显示 |
+| **服务** | 这把密钥可以服务哪些接口 |
 | 机构 | 用于防止跨机构轮换 |
-| 配额范围 | `credential`、`account`、`institution`、`provider` 或 `unknown` |
-| 优先级 | 数值越小越优先，用于指定首选 Key |
+| 配额范围 | `credential` / `account` / `institution` / `provider` / `unknown` |
+| 优先级 | 数值越小越优先 |
 
-**密钥通过接口只写不读。** 任何端点都不会返回已保存的密钥，界面只显示是否存在。
+**「服务」勾选项很重要。** Springer 的每个 API 各用一把独立密钥，每把必须绑定到自己的接口：
+
+```text
+meta 密钥        -> 勾选 springer_meta
+openaccess 密钥  -> 勾选 springer_openaccess
+```
+
+如果一把密钥把两个服务都勾上，它就可能被拿去调用另一个接口，导致 401。选择 Springer 时，
+表单会自动勾上两个服务，你为每把密钥只保留对应的那一个即可。
+
+**不勾任何服务**表示这把密钥可用于任意接口——这是单把 Elsevier 密钥的正确用法。
+
+> **面板能加密钥，但不能加出版社。** 列表里只会出现本版本已实现的提供商。接入新出版社需要
+> 改代码：实现一个 provider 类并在 `ServiceContainer._build_providers` 中注册。之后密钥池、
+> 路由、调度器和界面都会自动适配。
+
 
 ### 接口
 

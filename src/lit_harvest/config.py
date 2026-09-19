@@ -105,6 +105,14 @@ class PolicyConfig(BaseModel):
     jitter_ratio: float = Field(default=0.25, ge=0, le=1)
 
 
+#: Default service names per provider, used when a config entry omits `services`.
+DEFAULT_SERVICES: dict[str, list[str]] = {
+    "elsevier": ["scopus_search", "article_retrieval", "article_pdf"],
+    "openalex": ["works_search", "works_lookup"],
+    "springer": ["springer_meta", "springer_openaccess"],
+}
+
+
 class ProviderConfig(BaseModel):
     """Configuration for one external provider.
 
@@ -114,6 +122,7 @@ class ProviderConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    name: str | None = None
     enabled: bool = True
     base_url: str | None = None
     timeout_seconds: float = 30.0
@@ -122,6 +131,13 @@ class ProviderConfig(BaseModel):
     policy: PolicyConfig = Field(default_factory=PolicyConfig)
     services: dict[str, ServiceConfig] = Field(default_factory=dict)
     credentials: list[CredentialConfig] = Field(default_factory=list)
+
+    def resolved_services(self) -> dict[str, ServiceConfig]:
+        """Configured services, falling back to this provider's defaults."""
+        if self.services:
+            return dict(self.services)
+        defaults = DEFAULT_SERVICES.get(self.name or "", [])
+        return {name: ServiceConfig() for name in defaults}
 
     def service_enabled(self, name: str) -> bool:
         service = self.services.get(name)
@@ -211,21 +227,32 @@ class ProvidersConfig(BaseModel):
                 entries[name] = merged
             else:
                 entries[name] = item
+
+        # Stamp each entry with its provider name so provider-specific defaults
+        # (service names, base URL) still apply to a minimal config entry.
+        for name, item in list(entries.items()):
+            if isinstance(item, dict):
+                entries[name] = {"name": name, **item}
         return {"entries": entries}
 
     # --- accessors -------------------------------------------------------
 
     def get(self, name: str) -> ProviderConfig:
         try:
-            return self.entries[name]
+            entry = self.entries[name]
         except KeyError as exc:
             raise KeyError(f"Provider is not configured: {name}") from exc
+        # Stamp the name on access so provider-specific defaults apply even when
+        # the object was built directly rather than parsed from YAML.
+        if not entry.name:
+            entry.name = name
+        return entry
 
     def names(self) -> list[str]:
         return sorted(self.entries)
 
     def all(self) -> dict[str, ProviderConfig]:
-        return dict(self.entries)
+        return {name: self.get(name) for name in self.entries}
 
     def enabled(self) -> dict[str, ProviderConfig]:
         return {name: item for name, item in self.entries.items() if item.enabled}

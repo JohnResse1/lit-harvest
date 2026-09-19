@@ -156,7 +156,7 @@ class ServiceContainer:
         for name, provider_config in self.config.providers.all().items():
             services = [
                 (service_name, service.enabled)
-                for service_name, service in sorted(provider_config.services.items())
+                for service_name, service in sorted(provider_config.resolved_services().items())
             ]
             self.database.sync_provider(
                 name,

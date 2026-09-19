@@ -1,17 +1,22 @@
-import { useEffect, useState } from "react";
-import { api, type PoolCredential } from "../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { api, type PoolCredential, type ProviderCatalogEntry } from "../lib/api";
 import { useLanguage } from "../lib/LanguageContext";
 import { ProviderLogo } from "../components/ProviderLogo";
 import { StatusBadge } from "../components/StatusBadge";
 
-const PROVIDERS = ["elsevier", "openalex", "springer", "crossref", "arxiv", "pubmed", "unpaywall"];
 const SCOPES = ["credential", "account", "institution", "provider", "unknown"];
 
+/**
+ * The provider list comes from the backend catalog rather than a hard-coded
+ * array, so the UI can never offer a publisher this build cannot actually use.
+ */
 export function CredentialsPage() {
   const { t } = useLanguage();
+  const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
   const [entries, setEntries] = useState<PoolCredential[]>([]);
+  const [provider, setProvider] = useState("");
+  const [services, setServices] = useState<string[]>([]);
   const [form, setForm] = useState({
-    provider: "elsevier",
     name: "",
     secret: "",
     institution: "",
@@ -23,12 +28,36 @@ export function CredentialsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const selected = useMemo(
+    () => catalog.find((item) => item.name === provider) ?? null,
+    [catalog, provider],
+  );
+
   const refresh = () =>
     api.credentials().then(setEntries).catch((reason: Error) => setError(reason.message));
 
   useEffect(() => {
+    api
+      .credentialCatalog()
+      .then((items) => {
+        setCatalog(items);
+        const first = items.find((item) => item.requires_credential) ?? items[0];
+        if (first) {
+          setProvider(first.name);
+          // Pre-select every service a multi-API provider exposes. Springer
+          // issues one key per API, so a wrong default causes 401s.
+          setServices(first.services);
+        }
+      })
+      .catch((reason: Error) => setError(reason.message));
     refresh();
   }, []);
+
+  const chooseProvider = (name: string) => {
+    setProvider(name);
+    const item = catalog.find((entry) => entry.name === name);
+    setServices(item ? item.services : []);
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -36,13 +65,14 @@ export function CredentialsPage() {
     setMessage(null);
     try {
       await api.addCredential({
-        provider: form.provider.trim(),
+        provider,
         name: form.name.trim(),
         secret: form.secret || undefined,
         institution: form.institution || null,
         quota_scope: form.quota_scope,
         priority: Number(form.priority) || 100,
         notes: form.notes || null,
+        services,
       });
       setMessage(t("credentialSaved"));
       // The key is never echoed back, so clear it immediately after saving.
@@ -83,14 +113,30 @@ export function CredentialsPage() {
         <div className="pool-form">
           <label className="field-row">
             <span>{t("providerLabel")}</span>
-            <select value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })}>
-              {PROVIDERS.map((item) => <option key={item} value={item}>{item}</option>)}
+            <select value={provider} onChange={(e) => chooseProvider(e.target.value)}>
+              {catalog.map((item) => (
+                <option key={item.name} value={item.name}>
+                  {item.display_name}
+                  {item.requires_credential ? "" : ` — ${t("noKeyNeeded")}`}
+                </option>
+              ))}
             </select>
           </label>
+
+          {selected && !selected.requires_credential ? (
+            <p className="notice span-all">{t("providerNeedsNoKey")}</p>
+          ) : null}
+
           <label className="field-row">
             <span>{t("credentialName")}</span>
-            <input className="text-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="university_primary" />
+            <input
+              className="text-input"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="university_primary"
+            />
           </label>
+
           <label className="field-row">
             <span>{t("apiKey")}</span>
             <input
@@ -102,9 +148,41 @@ export function CredentialsPage() {
               autoComplete="off"
             />
           </label>
+
+          {selected && selected.services.length > 0 ? (
+            <div className="span-all">
+              <span className="field-label">{t("servicesLabel")}</span>
+              <div className="column-list">
+                {selected.services.map((service) => (
+                  <label className="checkbox" key={service}>
+                    <input
+                      type="checkbox"
+                      checked={services.includes(service)}
+                      onChange={() =>
+                        setServices((previous) =>
+                          previous.includes(service)
+                            ? previous.filter((item) => item !== service)
+                            : [...previous, service],
+                        )
+                      }
+                    />
+                    <code>{service}</code>
+                  </label>
+                ))}
+              </div>
+              {selected.services.length > 1 ? (
+                <p className="subtle">{t("servicesHint")}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           <label className="field-row">
             <span>{t("poolInstitution")}</span>
-            <input className="text-input" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} />
+            <input
+              className="text-input"
+              value={form.institution}
+              onChange={(e) => setForm({ ...form, institution: e.target.value })}
+            />
           </label>
           <label className="field-row">
             <span>{t("quotaScope")}</span>
@@ -120,7 +198,12 @@ export function CredentialsPage() {
             <span>{t("notes")}</span>
             <input className="text-input" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </label>
-          <button className="button primary" disabled={busy || !form.name.trim()} onClick={() => void submit()}>
+
+          <button
+            className="button primary"
+            disabled={busy || !form.name.trim() || !provider}
+            onClick={() => void submit()}
+          >
             {busy ? t("saving") : t("save")}
           </button>
         </div>
@@ -139,10 +222,10 @@ export function CredentialsPage() {
                 <tr>
                   <th>{t("providerLabel")}</th>
                   <th>{t("credentialName")}</th>
+                  <th>{t("servicesLabel")}</th>
                   <th>{t("poolInstitution")}</th>
                   <th>{t("quotaScope")}</th>
                   <th>{t("stage")}</th>
-                  <th>{t("priority")}</th>
                   <th>{t("lastUsed")}</th>
                   <th>{t("actions")}</th>
                 </tr>
@@ -160,12 +243,12 @@ export function CredentialsPage() {
                         {entry.secret_available ? t("secretStored") : t("secretMissing")}
                       </div>
                     </td>
+                    <td className="subtle">
+                      {entry.services.length > 0 ? entry.services.join(", ") : t("allServices")}
+                    </td>
                     <td>{entry.institution ?? "—"}</td>
                     <td>{entry.quota_scope}</td>
-                    <td>
-                      <StatusBadge value={entry.enabled ? entry.health : "disabled"} />
-                    </td>
-                    <td>{entry.priority}</td>
+                    <td><StatusBadge value={entry.enabled ? entry.health : "disabled"} /></td>
                     <td className="subtle">
                       {entry.last_used_at ? new Date(entry.last_used_at).toLocaleString() : t("never")}
                       <div>{entry.use_count} {t("uses")}</div>

@@ -553,3 +553,118 @@ def test_search_results_prime_the_oa_cache(tmp_path: Path) -> None:
     assert oa.checked is True
     assert oa.downloadable is True
     assert oa.pdf_url == "https://example.org/paper.pdf"
+
+
+# ------------------------------- credential catalog and service allowlists
+
+
+def test_catalog_lists_only_implemented_providers(tmp_path: Path) -> None:
+    """The UI must not offer a provider this build cannot use."""
+    config = AppConfig(
+        storage=StorageConfig(root=tmp_path / "data"),
+        database=DatabaseConfig(url=f"sqlite:///{tmp_path / 'state.db'}"),
+        providers=ProvidersConfig(
+            entries={
+                "elsevier": ProviderConfig(),
+                "openalex": OpenAlexConfig(),
+                # Not implemented in this build; must be ignored, not offered.
+                "wiley": ProviderConfig(),
+            }
+        ),
+    )
+    client = TestClient(create_app(config, start_worker=False))
+    payload = client.get("/api/credentials/catalog").json()
+    names = {item["name"] for item in payload}
+    assert names == {"elsevier", "openalex"}
+
+
+def test_catalog_reports_services_and_key_requirement(tmp_path: Path) -> None:
+    config = AppConfig(
+        storage=StorageConfig(root=tmp_path / "data"),
+        database=DatabaseConfig(url=f"sqlite:///{tmp_path / 'state.db'}"),
+        providers=ProvidersConfig(
+            entries={"elsevier": ProviderConfig(), "openalex": OpenAlexConfig()}
+        ),
+    )
+    client = TestClient(create_app(config, start_worker=False))
+    catalog = {item["name"]: item for item in client.get("/api/credentials/catalog").json()}
+
+    assert "scopus_search" in catalog["elsevier"]["services"]
+    assert catalog["elsevier"]["requires_credential"] is True
+    # OpenAlex needs no key and can therefore be offered without one.
+    assert catalog["openalex"]["requires_credential"] is False
+
+
+def test_minimal_config_entry_keeps_provider_default_services() -> None:
+    """`springer: {enabled: true}` must still expose its two APIs."""
+    providers = ProvidersConfig.model_validate({"entries": {"springer": {"enabled": True}}})
+    resolved = providers.get("springer").resolved_services()
+    assert set(resolved) == {"springer_meta", "springer_openaccess"}
+
+
+def test_credential_api_accepts_and_persists_services(tmp_path: Path) -> None:
+    """Separate keys per API must survive a round trip through the API."""
+    config = AppConfig(
+        storage=StorageConfig(root=tmp_path / "data"),
+        database=DatabaseConfig(url=f"sqlite:///{tmp_path / 'state.db'}"),
+        providers=ProvidersConfig(entries={"elsevier": ProviderConfig()}),
+    )
+    client = TestClient(create_app(config, start_worker=False))
+    created = client.post(
+        "/api/credentials",
+        json={
+            "provider": "elsevier",
+            "name": "primary",
+            "secret": "k",
+            "services": ["scopus_search"],
+        },
+    ).json()
+    assert created["services"] == ["scopus_search"]
+
+    listed = client.get("/api/credentials").json()
+    assert listed[0]["services"] == ["scopus_search"]
+
+
+def test_service_allowlist_pairs_each_api_with_its_own_key(tmp_path: Path) -> None:
+    """A key scoped to one service must never be chosen for another."""
+    config = AppConfig(
+        storage=StorageConfig(root=tmp_path / "data"),
+        database=DatabaseConfig(url=f"sqlite:///{tmp_path / 'state.db'}"),
+        providers=ProvidersConfig(entries={"elsevier": ProviderConfig()}),
+    )
+    container = ServiceContainer(config)
+    secrets = SecretStore(home=tmp_path / "secrets")
+    container.credentials.secrets = secrets
+
+    for name, service in (("meta", "springer_meta"), ("oa", "springer_openaccess")):
+        secrets.set(f"file:elsevier:{name}", f"k-{name}")
+        container.database.upsert_credential(
+            provider="elsevier",
+            name=name,
+            secret_ref=f"file:elsevier:{name}",
+            services=[service],
+        )
+
+    meta = container.credentials.peek("elsevier", "springer_meta")
+    oa = container.credentials.peek("elsevier", "springer_openaccess")
+    assert meta.name == "meta"
+    assert oa.name == "oa"
+
+
+def test_unscoped_credential_serves_any_service(tmp_path: Path) -> None:
+    """An empty allowlist keeps the original behaviour: valid for everything."""
+    config = AppConfig(
+        storage=StorageConfig(root=tmp_path / "data"),
+        database=DatabaseConfig(url=f"sqlite:///{tmp_path / 'state.db'}"),
+        providers=ProvidersConfig(entries={"elsevier": ProviderConfig()}),
+    )
+    container = ServiceContainer(config)
+    secrets = SecretStore(home=tmp_path / "secrets")
+    container.credentials.secrets = secrets
+    secrets.set("file:elsevier:any", "k")
+    container.database.upsert_credential(
+        provider="elsevier", name="any", secret_ref="file:elsevier:any"
+    )
+
+    for service in ("scopus_search", "article_retrieval", "article_pdf"):
+        assert container.credentials.peek("elsevier", service).name == "any"

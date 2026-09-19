@@ -124,6 +124,7 @@ export interface PoolCredential {
   last_used_at: string | null;
   use_count: number;
   notes: string | null;
+  services: string[];
 }
 
 export interface CredentialInput {
@@ -136,6 +137,15 @@ export interface CredentialInput {
   priority?: number;
   notes?: string | null;
   enabled?: boolean;
+  services?: string[];
+}
+
+export interface ProviderCatalogEntry {
+  name: string;
+  display_name: string;
+  services: string[];
+  capabilities: Record<string, boolean>;
+  requires_credential: boolean;
 }
 
 export interface InstanceInfo {
@@ -148,6 +158,7 @@ export interface InstanceInfo {
 export const api = {
   overview: () => request<Overview>("/api/overview"),
   instance: () => request<InstanceInfo>("/api/instance"),
+  credentialCatalog: () => request<ProviderCatalogEntry[]>("/api/credentials/catalog"),
   credentials: (provider?: string) =>
     request<PoolCredential[]>(
       provider ? `/api/credentials?provider=${encodeURIComponent(provider)}` : "/api/credentials",

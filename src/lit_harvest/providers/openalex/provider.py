@@ -36,6 +36,8 @@ class OpenAlexProvider:
     # OpenAlex reports OA locations, which lets the resolver avoid publisher
     # APIs entirely when a free copy exists.
     supports_oa_lookup = True
+    # No account or key is required; only an optional contact email.
+    requires_credential = False
 
     search_service = "works_search"
     metadata_service = "works_lookup"

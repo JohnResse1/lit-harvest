@@ -707,22 +707,40 @@ lit-harvest policy show
 
 Least-recently-used ordering spreads load across your credentials instead of exhausting one.
 
-### Managing keys in the dashboard
+### Adding keys from the dashboard
 
-Open **API pool** to add, disable, or delete credentials. Each provider shows an original letter-mark
-badge (publisher logos are registered trademarks and are not redistributed with this project).
+Open the **API pool** page. The provider list is served by the backend catalog, so it only shows
+publishers this build actually supports.
 
 | Field | Purpose |
 | --- | --- |
-| Provider | `elsevier`, `openalex`, `springer`, `crossref`, `arxiv`, `pubmed`, `unpaywall` |
-| Name | Internal identifier, for example `university_primary` |
-| API key | Write-only; stored locally and never displayed again |
+| Provider | Only implemented providers are offered |
+| Name | Internal identifier, e.g. `university_primary` |
+| API key | Write-only; stored locally, never displayed again |
+| **Services** | Which APIs this key may serve |
 | Institution | Used to prevent cross-institution rotation |
-| Quota scope | `credential`, `account`, `institution`, `provider`, or `unknown` |
-| Priority | Lower runs first; use it to prefer one key |
+| Quota scope | `credential` / `account` / `institution` / `provider` / `unknown` |
+| Priority | Lower runs first |
 
-**Secrets are write-only over the API.** A stored key is never returned by any endpoint; the UI only
-shows whether one exists.
+**The Services checkboxes matter.** Springer issues a separate key per API, so each key must be
+scoped to its own service:
+
+```text
+meta key        -> tick springer_meta
+openaccess key  -> tick springer_openaccess
+```
+
+Tick both on one key and it will be tried against the wrong endpoint, producing 401s. When you pick
+Springer, the form pre-ticks both services so you can add each key with one box ticked.
+
+A key with **no** services ticked is valid for any service — that is the right choice for a single
+Elsevier key.
+
+> **The dashboard adds keys, it does not add publishers.** Only providers implemented in this build
+> appear in the list. Supporting a new publisher is a code change: implement a provider class and
+> register it in `ServiceContainer._build_providers`. The pool, resolver, scheduler, and UI then
+> work without further changes.
+
 
 ### API endpoints
 

@@ -234,3 +234,7 @@ th.narrow, td.narrow { width: 40px; text-align: center; }
   background: #fff;
 }
 .pool-form .search-input { min-width: 220px; }
+
+.span-all { grid-column: 1 / -1; }
+.field-label { display: block; margin-bottom: 6px; color: #62718b; font-size: .84rem; }
+.pool-form .notice { margin: 0; }
