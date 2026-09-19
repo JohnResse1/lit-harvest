@@ -539,3 +539,47 @@ def test_format_census_groups_downloads(tmp_path: Path) -> None:
     census = {(row["provider"], row["format"]): row["count"] for row in database.format_census()}
     assert census[("europepmc", "xml")] == 2
     assert census[("openaccess", "pdf")] == 1
+
+
+# ------------------------------------------------- routing safety
+
+
+def test_hosted_record_provider_is_not_chosen_for_arbitrary_doi(
+    database: Database,
+) -> None:
+    """Regression: Europe PMC must not hijack routing for paywalled DOIs.
+
+    Europe PMC advertises `supports_fulltext`, but it can only serve records it
+    hosts. Once it was registered alongside Elsevier it became
+    `fulltext_providers()[0]` and every non-PMC DOI was routed to it, failing
+    with "no record" instead of reaching the entitled publisher.
+    """
+    epmc = EuropePmcProvider(database=database)
+
+    class Publisher:
+        name = "elsevier"
+        display_name = "Elsevier"
+        supports_fulltext = True
+        fulltext_service = "article_retrieval"
+
+    # Registration order deliberately puts the conditional provider first.
+    resolver = Resolver(ProviderRegistry([epmc, Publisher()]))
+    route = resolver.route_for_job("10.1016/j.mtcomm.2026.115551")
+    assert route is not None
+    assert route.provider == "elsevier"
+
+
+def test_hosted_record_provider_is_used_when_it_is_the_only_option(
+    database: Database,
+) -> None:
+    """With nothing else configured, a best-effort attempt is still made."""
+    route = Resolver(ProviderRegistry([EuropePmcProvider(database=database)])).route_for_job(
+        "10.1234/whatever"
+    )
+    assert route is not None
+    assert route.provider == "europepmc"
+
+
+def test_europepmc_declares_hosted_record_constraint() -> None:
+    provider = EuropePmcProvider(database=Database("sqlite:///:memory:"))
+    assert provider.fulltext_requires_hosted_record is True

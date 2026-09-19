@@ -24,6 +24,11 @@ QUALITY: dict[str, int] = {
 }
 
 
+def _requires_hosted_record(provider: Any) -> bool:
+    """True when a provider can only serve records it already hosts."""
+    return bool(getattr(provider, "fulltext_requires_hosted_record", False))
+
+
 @dataclass(slots=True)
 class CandidateSource:
     """One way a DOI could legitimately be obtained."""
@@ -170,10 +175,16 @@ class Resolver:
         500 metadata lookups. The open-access decision happens when the job runs.
         """
         del doi  # routing is capability-based until execution time
-        providers = self.providers.fulltext_providers()
+        providers = list(self.providers.fulltext_providers())
         if not providers:
             return None
-        provider = providers[0]
+        # Some providers (Europe PMC) can only serve records they host, so they
+        # must not be chosen for an arbitrary DOI. Prefer a provider that can
+        # attempt any DOI, and only fall back to a conditional one.
+        provider = next(
+            (item for item in providers if not _requires_hosted_record(item)),
+            providers[0],
+        )
         return CandidateSource(
             provider=provider.name,
             service=getattr(provider, "fulltext_service", "article_retrieval"),

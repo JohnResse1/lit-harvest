@@ -42,6 +42,10 @@ class EuropePmcProvider:
     supports_search = True
     # Structured JATS XML for open-access records.
     supports_fulltext = True
+    # This provider can only serve records it actually hosts: most DOIs in the
+    # wider literature have no PMC record. Routing must therefore treat it as a
+    # fallback, not as an authoritative publisher route for arbitrary DOIs.
+    fulltext_requires_hosted_record = True
     supports_pdf = False
     supports_metadata = True
     supports_oa_lookup = True
