@@ -83,6 +83,30 @@ class DocumentStorage:
     def read_raw(self, path: Path) -> bytes:
         return path.read_bytes()
 
+    def find_pdf(self, doi: str) -> Path | None:
+        """Any PDF already stored for this paper, whoever put it there.
+
+        Papers sometimes arrive with a PDF that this tool did not download — a
+        publisher PDF fetched manually, or one added later by hand. Discovery is
+        therefore by extension rather than by a provider-specific filename, so a
+        hand-added file is reused instead of triggering a duplicate download.
+        """
+        raw = self.raw_dir(doi)
+        if not raw.exists():
+            return None
+        candidates = sorted(
+            (path for path in raw.glob("*.pdf") if path.is_file()),
+            # Deterministic pick, and prefer a publisher download over a
+            # generic open-access copy when both exist.
+            key=lambda path: (path.name.startswith("openaccess"), path.name),
+        )
+        return candidates[0] if candidates else None
+
+    def pdf_filename(self, provider: str | None) -> str:
+        """Provider-scoped PDF name, safe for the filesystem."""
+        safe = _UNSAFE.sub("_", (provider or "publisher").strip()) or "publisher"
+        return f"{safe}_pdf.pdf"
+
     def write_normalized(self, doi: str, document: dict[str, Any]) -> Path:
         path = self.normalized_dir(doi) / "paper.json"
         atomic_write_json(path, document)

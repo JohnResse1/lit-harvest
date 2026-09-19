@@ -429,11 +429,12 @@ class AcquisitionService:
             raise KeyError(f"Paper not found: {paper_id}")
         if not paper.doi:
             raise ValueError("PDF download requires a DOI")
-        provider = self.providers.first_with_capability("supports_pdf")
-        if provider is None or not hasattr(provider, "fetch_pdf"):
-            raise ProviderUnavailableError("No configured provider can supply publisher PDFs.")
-        existing = self.storage.paper_dir(paper.doi) / "raw" / "elsevier_pdf.pdf"
-        if existing.exists():
+        # Reuse any PDF already on disk for this paper — including one the user
+        # added by hand. This is checked *before* provider lookup so a
+        # manually-supplied PDF works even with no PDF-capable provider
+        # configured, and so it is never downloaded twice.
+        existing = self.storage.find_pdf(paper.doi)
+        if existing is not None:
             self.database.add_paper_extra(
                 paper.id,
                 {"pdf_path": str(existing), "pdf_reused": True},
@@ -444,8 +445,15 @@ class AcquisitionService:
                 "pdf_path": str(existing),
                 "reused": True,
             }
+        provider = self.providers.first_with_capability("supports_pdf")
+        if provider is None or not hasattr(provider, "fetch_pdf"):
+            raise ProviderUnavailableError(
+                "No configured provider can supply publisher PDFs. Place a PDF in the "
+                "paper's raw/ directory to use one you obtained yourself."
+            )
         result: FullTextResult = provider.fetch_pdf(paper.doi)
-        path = self.storage.write_raw(paper.doi, "elsevier_pdf.pdf", result.content)
+        filename = self.storage.pdf_filename(result.provider)
+        path = self.storage.write_raw(paper.doi, filename, result.content)
         self.database.record_download(
             paper_id=paper.id,
             provider=result.provider,
