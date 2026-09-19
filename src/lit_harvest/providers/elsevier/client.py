@@ -47,6 +47,7 @@ class ElsevierClient:
         base_delay_seconds: float = 1.0,
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        policy: Any | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
@@ -54,6 +55,7 @@ class ElsevierClient:
         self.base_delay_seconds = base_delay_seconds
         self._transport = transport
         self._sleep = sleep
+        self._policy = policy
 
     def request(
         self,
@@ -72,6 +74,9 @@ class ElsevierClient:
             "User-Agent": "lit-harvest/0.1.0",
             **(headers or {}),
         }
+        # Respect the pacing policy before touching the network.
+        if self._policy is not None:
+            self._policy.wait_turn(provider, service)
         last_error: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             started = time.monotonic()

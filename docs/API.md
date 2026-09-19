@@ -19,6 +19,7 @@ GET  /api/instance
 GET  /api/overview
 GET  /api/doctor?network=false
 GET  /api/worker
+GET  /api/policy
 POST /api/worker/tick
 
 GET  /api/papers?limit=&offset=&stage=
@@ -84,6 +85,12 @@ Elsevier `<service-error>` XML) are never forwarded to the browser.
 | `403` | Account not entitled to this content |
 | `422` | Invalid input (bad DOI string, missing CSV column, invalid max_results) |
 | `502` | Publisher or network failure |
+
+## Usage policy
+
+`GET /api/policy` reports each provider's pacing rules and today's usage, so the dashboard can show
+how much of the daily allowance remains. Publishers meter access per institution; the defaults are
+intentionally gentle.
 
 ## UI routes
 

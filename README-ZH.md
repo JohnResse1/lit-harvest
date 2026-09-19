@@ -616,6 +616,47 @@ lit-harvest security scan
 
 详见 [SECURITY.md](SECURITY.md)。如果发生真实密钥泄漏，请先撤销密钥，不要开公开 Issue。
 
+## 使用限速
+
+出版社的 API 访问是**按机构**计量的，不是按个人。一个客户端跑得太猛，可能拖慢甚至封禁同一所大学
+所有研究者的访问。因此本工具内置了温和的默认节奏和每日上限。
+
+```bash
+lit-harvest policy show
+```
+
+```text
+Provider | Service   | Used today | Daily cap | Min interval
+elsevier | Full text |          0 |       100 | 60s
+elsevier | PDF       |          0 |        50 | 120s
+elsevier | Search    |          2 |       200 | 5s
+```
+
+| 控制项 | 默认值 | 原因 |
+| --- | --- | --- |
+| 全文间隔 | 60 秒 | 让批量任务跑一整夜，而不是瞬时爆发 |
+| PDF 间隔 | 120 秒 | PDF 体积更大，对出版社压力更高 |
+| 检索间隔 | 5 秒 | 检索较轻，但同样计量 |
+| 全文每日上限 | 100 | 远高于正常研究工作量 |
+| PDF 每日上限 | 50 | 比 XML 更保守 |
+| 检索每日上限 | 200 | 约等于 5000 条元数据 |
+| 随机抖动 | ±25% | 避免固定、机械的请求节奏 |
+
+默认值刻意保守。只有当图书馆或出版社给你**书面授权**后，才应该调高。
+
+```yaml
+providers:
+  entries:
+    elsevier:
+      policy:
+        fulltext_daily_limit: 200     # 有意识地调高
+        fulltext_min_interval_seconds: 30
+        unlimited: false              # 需要明确授权
+```
+
+> **设置 `unlimited: true` 等于声明你持有书面授权。** 出版社保留监控用量和模式、
+> 并在怀疑未授权使用时暂停访问的权利。
+
 ## 存储目录
 
 默认数据保存在 `./data`，也可以指向任意位置，包括移动硬盘。

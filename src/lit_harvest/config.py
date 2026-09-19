@@ -84,6 +84,24 @@ class ServiceConfig(BaseModel):
     enabled: bool = True
 
 
+class PolicyConfig(BaseModel):
+    """Pacing and daily ceilings for one provider.
+
+    Defaults are deliberately gentle: publishers meter access per institution,
+    so one aggressive client can affect every researcher at the same university.
+    Set `unlimited: true` only when you have explicit written authorization.
+    """
+
+    unlimited: bool = False
+    fulltext_min_interval_seconds: float = Field(default=60.0, ge=0)
+    pdf_min_interval_seconds: float = Field(default=120.0, ge=0)
+    search_min_interval_seconds: float = Field(default=5.0, ge=0)
+    fulltext_daily_limit: int | None = Field(default=100, ge=0)
+    pdf_daily_limit: int | None = Field(default=50, ge=0)
+    search_daily_limit: int | None = Field(default=200, ge=0)
+    jitter_ratio: float = Field(default=0.25, ge=0, le=1)
+
+
 class ProviderConfig(BaseModel):
     """Configuration for one external provider.
 
@@ -97,6 +115,7 @@ class ProviderConfig(BaseModel):
     base_url: str | None = None
     timeout_seconds: float = 30.0
     download_pdf: bool = False
+    policy: PolicyConfig = Field(default_factory=PolicyConfig)
     services: dict[str, ServiceConfig] = Field(default_factory=dict)
     credentials: list[CredentialConfig] = Field(default_factory=list)
 

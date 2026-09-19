@@ -6,6 +6,7 @@ from typing import Any
 
 from lit_harvest.config import AppConfig, ProviderConfig, load_config
 from lit_harvest.credentials.manager import CredentialManager
+from lit_harvest.policy import PolicyService, ProviderPolicy
 from lit_harvest.providers.elsevier import ElsevierProvider
 from lit_harvest.providers.registry import ProviderRegistry
 from lit_harvest.quotas.manager import QuotaManager
@@ -35,6 +36,7 @@ class ServiceContainer:
         self.storage.ensure_layout()
         self.credentials = CredentialManager(self.config, self.database)
         self.quotas = QuotaManager(self.database)
+        self.policy = self._build_policy_service()
         self.queue_control = QueueControl()
         self._sync_providers()
         self.providers: ProviderRegistry = self._build_providers()
@@ -61,6 +63,23 @@ class ServiceContainer:
         self.dashboard = DashboardService(self.database, self.storage, self.scheduler)
         self.maintenance = MaintenanceService(self.database, self.scheduler)
         self.storage_settings = StorageSettingsService(self.config, self.database)
+
+    def _build_policy_service(self) -> PolicyService:
+        """Translate configured policy settings into runtime pacing rules."""
+        policies: dict[str, ProviderPolicy] = {}
+        for name, provider_config in self.config.providers.all().items():
+            configured = provider_config.policy
+            unlimited = configured.unlimited
+            policies[name] = ProviderPolicy(
+                fulltext_min_interval_seconds=configured.fulltext_min_interval_seconds,
+                pdf_min_interval_seconds=configured.pdf_min_interval_seconds,
+                search_min_interval_seconds=configured.search_min_interval_seconds,
+                fulltext_daily_limit=None if unlimited else configured.fulltext_daily_limit,
+                pdf_daily_limit=None if unlimited else configured.pdf_daily_limit,
+                search_daily_limit=None if unlimited else configured.search_daily_limit,
+                jitter_ratio=configured.jitter_ratio,
+            )
+        return PolicyService(self.database, policies=policies)
 
     def _build_providers(self) -> ProviderRegistry:
         """Instantiate every enabled provider described by the configuration.
@@ -90,6 +109,7 @@ class ServiceContainer:
             quotas=self.quotas,
             timeout_seconds=provider_config.timeout_seconds,
             max_attempts=self.config.scheduler.retry.max_attempts,
+            policy=self.policy,
         )
         # Kept as an attribute for backwards compatibility with earlier code.
         self.elsevier = provider

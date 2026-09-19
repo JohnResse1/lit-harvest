@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 from lit_harvest.credentials.manager import CredentialManager, CredentialUnavailableError
 from lit_harvest.models import Credential, HealthStatus
+from lit_harvest.policy import PolicyService
 from lit_harvest.providers.base import (
     FullTextResult,
     HealthCheckResult,
@@ -45,12 +46,16 @@ class ElsevierProvider:
         client: ElsevierClient | None = None,
         timeout_seconds: float = 30.0,
         max_attempts: int = 4,
+        policy: PolicyService | None = None,
     ) -> None:
         self.database = database
         self.credentials = credentials
         self.quotas = quotas
+        self.policy = policy
         self.client = client or ElsevierClient(
-            timeout_seconds=timeout_seconds, max_attempts=max_attempts
+            timeout_seconds=timeout_seconds,
+            max_attempts=max_attempts,
+            policy=policy,
         )
 
     def healthcheck(
@@ -215,6 +220,8 @@ class ElsevierProvider:
         return self._request_pdf(doi)
 
     def _request_fulltext(self, doi: str, *, limit: bool = True) -> FullTextResult:
+        if self.policy is not None:
+            self.policy.check_daily(self.name, "article_retrieval")
         excluded: set[str] = set()
         last_error: ProviderError | None = None
         while True:
@@ -273,6 +280,8 @@ class ElsevierProvider:
                 continue
 
     def _request_pdf(self, doi: str) -> FullTextResult:
+        if self.policy is not None:
+            self.policy.check_daily(self.name, "article_pdf")
         excluded: set[str] = set()
         last_error: ProviderError | None = None
         while True:

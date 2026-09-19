@@ -19,6 +19,20 @@ providers:
     enabled: true
     # Optional: also save the publisher PDF alongside the canonical FULL XML.
     download_pdf: false
+
+    # Usage pacing. Publishers meter access per INSTITUTION, not per person, so
+    # one aggressive client can affect every researcher at your university.
+    # These defaults are deliberately gentle. Raise them only if your library
+    # or the publisher has given you written authorization.
+    policy:
+      unlimited: false
+      fulltext_min_interval_seconds: 60
+      pdf_min_interval_seconds: 120
+      search_min_interval_seconds: 5
+      fulltext_daily_limit: 100
+      pdf_daily_limit: 50
+      search_daily_limit: 200
+      jitter_ratio: 0.25
     services:
       scopus_search:
         enabled: true

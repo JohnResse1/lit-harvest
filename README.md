@@ -645,6 +645,50 @@ path (`.lit-harvest/`, `config.yaml`, `data/`, `.env`) is tracked by Git. Enforc
 See [SECURITY.md](SECURITY.md). Never open a public issue for an active credential leak — revoke the
 key first.
 
+## Usage Policy
+
+Publishers meter API access **per institution**, not per person. One aggressive client can therefore
+slow down or block access for every researcher at the same university. This tool ships with a gentle
+default pace and a daily ceiling.
+
+```bash
+lit-harvest policy show
+```
+
+```text
+Provider | Service   | Used today | Daily cap | Min interval
+elsevier | Full text |          0 |       100 | 60s
+elsevier | PDF       |          0 |        50 | 120s
+elsevier | Search    |          2 |       200 | 5s
+```
+
+| Control | Default | Why |
+| --- | --- | --- |
+| Full-text interval | 60 s | Keeps bulk jobs running overnight instead of in a burst |
+| PDF interval | 120 s | PDFs are larger and heavier on the publisher |
+| Search interval | 5 s | Search is lightweight but still metered |
+| Full-text daily cap | 100 | Well inside a normal research workload |
+| PDF daily cap | 50 | More conservative than XML |
+| Search daily cap | 200 | Roughly 5,000 metadata records |
+| Jitter | ±25% | Avoids a fixed, machine-like request rhythm |
+
+Defaults are conservative on purpose. Increase them only if your library or the publisher has given
+you written authorization.
+
+```yaml
+providers:
+  entries:
+    elsevier:
+      policy:
+        fulltext_daily_limit: 200     # raise deliberately
+        fulltext_min_interval_seconds: 30
+        unlimited: false              # requires explicit authorization
+```
+
+> **Setting `unlimited: true` is a declaration that you hold written authorization.** Publishers
+> reserve the right to monitor usage volumes and patterns, and to suspend access on suspicion of
+> unauthorized use.
+
 ## Storage Location
 
 Data is stored in `./data` by default, and you can point it anywhere — including an external drive.

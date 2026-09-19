@@ -229,11 +229,51 @@ def auth_test(
         raise typer.Exit(code=1)
 
 
+policy_app = typer.Typer(help="Inspect and adjust usage pacing for shared subscriptions.")
+app.add_typer(policy_app, name="policy")
+
 storage_app = typer.Typer(help="Choose where papers and the database are stored.")
 app.add_typer(storage_app, name="storage")
 
 security_app = typer.Typer(help="Prevent accidental API-key publication.")
 app.add_typer(security_app, name="security")
+
+
+@policy_app.command("show")
+def policy_show(
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Show pacing rules and how much of today's allowance is used."""
+    container = _container(config)
+    table = Table(title="Usage policy")
+    table.add_column("Provider")
+    table.add_column("Service")
+    table.add_column("Used today")
+    table.add_column("Daily cap")
+    table.add_column("Min interval")
+    service_map = [
+        ("article_retrieval", "Full text"),
+        ("article_pdf", "PDF"),
+        ("scopus_search", "Search"),
+    ]
+    for provider in container.config.providers.names():
+        policy = container.policy.policy_for(provider)
+        for service, label in service_map:
+            limit = policy.daily_limit(service)
+            used = container.policy.usage_today(provider, service)
+            interval = policy.min_interval(service)
+            table.add_row(
+                provider,
+                label,
+                str(used),
+                "unlimited" if limit is None else str(limit),
+                f"{interval:g}s",
+            )
+    console.print(table)
+    console.print(
+        "[dim]These caps protect shared institutional access. Raise them only with "
+        "written authorization from your library or publisher.[/dim]"
+    )
 
 
 @storage_app.command("show")

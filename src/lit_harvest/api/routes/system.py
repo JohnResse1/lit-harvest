@@ -27,6 +27,22 @@ def overview(container: ContainerDep) -> dict[str, Any]:
     return container.dashboard.overview()
 
 
+@router.get("/policy")
+def policy_status(container: ContainerDep) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for provider in container.config.providers.names():
+        policy = container.policy.policy_for(provider)
+        payload = container.policy.describe(provider)
+        payload["usage"] = {
+            "article_retrieval": container.policy.usage_today(provider, "article_retrieval"),
+            "article_pdf": container.policy.usage_today(provider, "article_pdf"),
+            "scopus_search": container.policy.usage_today(provider, "scopus_search"),
+        }
+        payload["fulltext_daily_limit"] = policy.fulltext_daily_limit
+        entries.append(payload)
+    return entries
+
+
 @router.get("/worker")
 def worker_status(container: ContainerDep) -> dict[str, Any]:
     return {
