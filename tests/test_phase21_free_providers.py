@@ -583,3 +583,60 @@ def test_hosted_record_provider_is_used_when_it_is_the_only_option(
 def test_europepmc_declares_hosted_record_constraint() -> None:
     provider = EuropePmcProvider(database=Database("sqlite:///:memory:"))
     assert provider.fulltext_requires_hosted_record is True
+
+
+def test_crossref_search_uses_valid_select_fields(database: Database) -> None:
+    """Regression: one bad `select` field fails the whole request with HTTP 400.
+
+    `reference-count` does not exist on the works route (it is
+    `references-count`), and sending it made every Crossref search fail.
+    """
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request.url.params.get("select", ""))
+        return httpx.Response(
+            200, json={"message": {"items": [CROSSREF_WORK], "total-results": 1}}
+        )
+
+    client = JsonHttpClient(
+        base_url="https://api.crossref.org",
+        provider="crossref",
+        transport=httpx.MockTransport(handler),
+        sleep=lambda _: None,
+    )
+    provider = CrossrefProvider(database=database, client=client)
+    provider.search("battery", max_results=1)
+
+    fields = {item.strip() for item in captured[0].split(",")}
+    assert "references-count" in fields
+    assert "reference-count" not in fields
+    # Spot-check other fields that must remain valid on this route.
+    assert {"DOI", "title", "link", "license", "created"} <= fields
+
+
+def test_crossref_search_requests_score_sort(database: Database) -> None:
+    """Regression: `cursor` alone silently drops relevance ranking.
+
+    Without an explicit `sort=score`, Crossref returned unrelated records
+    (cardiology papers for a battery query).
+    """
+    captured: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(dict(request.url.params))
+        return httpx.Response(
+            200, json={"message": {"items": [CROSSREF_WORK], "total-results": 1}}
+        )
+
+    client = JsonHttpClient(
+        base_url="https://api.crossref.org",
+        provider="crossref",
+        transport=httpx.MockTransport(handler),
+        sleep=lambda _: None,
+    )
+    provider = CrossrefProvider(database=database, client=client)
+    provider.search("solid-state battery", max_results=1)
+
+    assert captured[0]["sort"] == "score"
+    assert captured[0]["order"] == "desc"

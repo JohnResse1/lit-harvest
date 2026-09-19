@@ -721,11 +721,30 @@ GET    /api/credentials/{provider}/selection
 
 本工具把**检索**和**全文获取**分开，因为几乎没有几家出版社提供检索 API。
 
-| 提供商 | 检索 | 全文 | PDF | OA 查询 | 凭证 |
-| --- | --- | --- | --- | --- | --- |
-| **OpenAlex** | ✅ | – | – | ✅ | **无需任何凭证** |
-| **Springer Nature** | ✅ | – | – | ✅ | 两把 Key（Meta + OpenAccess） |
-| **Elsevier** | ✅（Scopus） | ✅（ScienceDirect） | ✅ | – | 需要 API Key |
+| 提供商 | 检索 | 全文 | PDF | 元数据 | OA 查询 | 凭证 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **OpenAlex** | ✅ | – | – | ✅ | ✅ | **无需任何凭证** |
+| **Crossref** | ✅ | – | – | ✅ | – | **无需任何凭证** |
+| **Unpaywall** | – | – | – | – | ✅ | **无需 Key**（需填联系邮箱） |
+| **Europe PMC** | ✅ | ✅（OA JATS） | – | ✅ | ✅ | **无需任何凭证** |
+| **Springer Nature** | ✅ | – | – | ✅ | ✅ | 两把 Key（Meta + OpenAccess） |
+| **Elsevier** | ✅（Scopus） | ✅（ScienceDirect） | ✅ | ✅ | – | 需要 API Key |
+
+Crossref 还会返回各出版社**注册的文本挖掘（TDM）链接** —— 不少出版社把机器可读的全文入口注册在
+Crossref，因此一次接入就能发现那些原本需要逐家写客户端的入口。注意：发现链接 **不等于** 获得授权，
+真正取回仍需要你自己的访问权限。
+
+**无需凭证的提供商会显示为不需要 Key。** Unpaywall 在未填写 `contact_email` 前保持休眠，因为它的
+API 条款要求调用方表明身份。
+
+### 查看已下载的文档格式
+
+```bash
+lit-harvest formats
+```
+
+按提供商 / 接口 / 格式统计已成功下载的文档，方便在决定优先做哪个解析器之前，先看清语料的构成
+（结构化 XML / HTML / PDF 各占多少）。
 
 Springer 的两个 API **各用一把独立密钥**。凭证可以声明自己服务哪个接口，密钥池会正确配对：
 

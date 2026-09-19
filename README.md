@@ -758,11 +758,22 @@ GET    /api/credentials/{provider}/selection
 Literature Harvester separates **discovery** from **full-text retrieval**, because few publishers
 offer a search API at all.
 
-| Provider | Search | Full text | PDF | OA lookup | Credentials |
-| --- | --- | --- | --- | --- | --- |
-| **OpenAlex** | yes | – | – | yes | **none required** |
-| **Springer Nature** | yes | – | – | yes | 2 keys (Meta + OpenAccess) |
-| **Elsevier** | yes (Scopus) | yes (ScienceDirect) | yes | – | API key |
+| Provider | Search | Full text | PDF | Metadata | OA lookup | Credentials |
+| --- | --- | --- | --- | --- | --- | --- |
+| **OpenAlex** | yes | – | – | yes | yes | **none required** |
+| **Crossref** | yes | – | – | yes | – | **none required** |
+| **Unpaywall** | – | – | – | – | yes | **none required** (needs contact email) |
+| **Europe PMC** | yes | yes (OA JATS) | – | yes | yes | **none required** |
+| **Springer Nature** | yes | – | – | yes | yes | 2 keys (Meta + OpenAccess) |
+| **Elsevier** | yes (Scopus) | yes (ScienceDirect) | yes | yes | – | API key |
+
+Crossref additionally exposes each publisher's **registered text-mining links** — many publishers
+register their machine-readable full-text route there, so one integration surfaces routes that would
+otherwise need a bespoke client per publisher. A discovered link is not a grant of access; following
+it still requires your own entitlement.
+
+**Key-free providers are never prompted for a key.** Unpaywall stays inert until `contact_email` is
+set, because its API terms require callers to identify themselves.
 
 Springer issues **separate keys per API**. Each credential declares which services it may serve, so
 the pool pairs them correctly:
@@ -788,6 +799,15 @@ lit-harvest search --provider springer --query 'solid-state battery' --max-resul
 Springer's Meta API returns full abstracts and author lists, and for open-access records it exposes a
 publisher-hosted PDF URL that the open-access fetcher can download without using any subscription
 quota.
+
+### Surveying downloaded formats
+
+```bash
+lit-harvest formats
+```
+
+Prints successful downloads grouped by provider, service, and format, so you can see what a corpus
+is actually made of (structured XML vs HTML vs PDF) before prioritizing parser work.
 
 ### OpenAlex (no key required)
 
@@ -1026,6 +1046,7 @@ Rebuild the bilingual frontend:
 | --- | --- |
 | [**Quick Start**](QUICKSTART.md) | **Start here — for new users, web + CLI** |
 | [Architecture](docs/ARCHITECTURE.md) | Layers, boundaries, data flow |
+| [Document Parsing](docs/PARSING.md) | Deterministic parsers, JATS, PDF policy |
 | [Data Model](docs/DATA_MODEL.md) | Core entities and SQLite schema |
 | [Local API](docs/API.md) | Endpoints and UI routes |
 | [Operations](docs/OPERATIONS.md) | Credentials, quotas, resume, storage |

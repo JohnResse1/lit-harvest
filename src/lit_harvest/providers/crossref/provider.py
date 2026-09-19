@@ -122,11 +122,18 @@ class CrossrefProvider:
                 "query.bibliographic": query,
                 "rows": page_size,
                 "cursor": cursor,
+                # Without an explicit score sort, adding `cursor` silently
+                # drops relevance ranking and returns unrelated records.
+                "sort": "score",
+                "order": "desc",
+                # Field names must match Crossref's route-specific select list
+                # exactly; an unknown one fails the whole request with HTTP 400.
+                # Note it is `references-count` (plural) on this route.
                 "select": (
                     "DOI,title,author,container-title,short-container-title,publisher,"
                     "type,issued,published-print,published-online,created,ISSN,volume,"
                     "issue,page,article-number,abstract,subject,link,license,"
-                    "reference-count,is-referenced-by-count,URL"
+                    "references-count,is-referenced-by-count,URL"
                 ),
             }
             filters = self._date_filter(start_year, end_year)
