@@ -363,6 +363,8 @@ http://127.0.0.1:8765/docs
 lit-harvest version
 lit-harvest demo [--reset] [--clear]
 lit-harvest storage show
+lit-harvest policy show
+lit-harvest cache
 lit-harvest storage set PATH [--migrate/--no-migrate] [--overwrite]
 lit-harvest storage reset [--migrate/--no-migrate]
 lit-harvest doctor  [--network] [--json] [--config PATH]
@@ -379,6 +381,9 @@ lit-harvest fetch-session SESSION_ID [--pdf] [--config PATH]
 
 lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--pdf|--no-pdf] [--config PATH]
 lit-harvest parse [--limit N] [--force] [--config PATH]
+lit-harvest cache [--config PATH]
+lit-harvest cleanup [--yes] [--drop-normalized] [--config PATH]
+lit-harvest rebuild --missing [--limit N] [--pdf/--no-pdf] [--config PATH]
 lit-harvest export PATH [--format csv|json|jsonl] [--config PATH]
 lit-harvest jobs [--status STATUS] [--limit N] [--config PATH]
 lit-harvest quota [--config PATH]
@@ -656,6 +661,61 @@ providers:
 
 > **设置 `unlimited: true` 等于声明你持有书面授权。** 出版社保留监控用量和模式、
 > 并在怀疑未授权使用时暂停访问的权利。
+
+## 全文缓存生命周期
+
+出版社协议通常要求：项目结束时删除**原始全文**，但允许保留衍生结果。本工具把两者分开：
+
+```text
+papers + normalized JSON   永久保留
+raw XML / PDF              临时缓存（可删除、可重建）
+```
+
+### 查看当前占用
+
+```bash
+lit-harvest cache
+```
+
+```text
+Papers               │ 372
+Raw cached           │   1
+Raw missing          │ 371
+Normalized available │   1
+Disk used            │ 4.05 MB
+```
+
+### 项目结束时删除原始缓存
+
+```bash
+lit-harvest cleanup --yes
+```
+
+这会删除 `raw/elsevier_xml.xml` 和 `raw/elsevier_pdf.pdf`，但保留：
+
+- 论文记录与 DOI
+- `normalized/paper.json`
+- `state.json`（来源信息）
+
+加上 `--drop-normalized` 则只保留元数据。
+
+### 需要时重新获取
+
+```bash
+lit-harvest rebuild --missing --limit 50
+```
+
+不需要重新检索：DOI 已在数据库中，工具只会补回缺失的原始文件。
+重建同样受限速策略约束。
+
+### 为什么这样设计
+
+| 目标 | 实现方式 |
+| --- | --- |
+| 保留可用语料 | 元数据与规范化文档长期保留 |
+| 遵守保留条款 | 原始文件可随时删除 |
+| 免去手工重下 | 一条命令只补缺失部分 |
+| 不超用量 | 重建复用同一套限速策略 |
 
 ## 存储目录
 

@@ -22,6 +22,7 @@ from lit_harvest.models import (
 )
 from lit_harvest.providers.base import FullTextResult, ProviderUnavailableError
 from lit_harvest.providers.registry import ProviderRegistry
+from lit_harvest.services.cache import CacheService
 from lit_harvest.services.normalization import NormalizationService
 from lit_harvest.services.resolver import Resolver
 from lit_harvest.services.search_sessions import SearchCandidate, SearchSessionStore
@@ -84,12 +85,14 @@ class AcquisitionService:
         storage: DocumentStorage,
         providers: ProviderRegistry,
         normalization: NormalizationService,
+        cache: CacheService | None = None,
     ) -> None:
         self.config = config
         self.database = database
         self.storage = storage
         self.providers = providers
         self.normalization = normalization
+        self.cache = cache
         self.resolver = Resolver(providers)
         self.search_sessions = SearchSessionStore(database)
 
@@ -458,6 +461,54 @@ class AcquisitionService:
                 "No configured provider can retrieve full text for this DOI."
             )
         return self.providers.get(route.provider)
+
+    def rebuild_missing(
+        self,
+        *,
+        limit: int = 100,
+        download_pdf: bool = False,
+        on_progress: Any | None = None,
+    ) -> dict[str, Any]:
+        """Re-fetch raw full text for papers whose cache was deleted.
+
+        This is the counterpart to `cleanup --raw`: metadata and normalized
+        output survive, and the original documents can be restored on demand.
+        """
+        if self.cache is None:
+            raise RuntimeError("Cache service is not available")
+        targets = self.cache.missing_raw(limit=limit)
+        results: list[dict[str, Any]] = []
+        succeeded = failed = 0
+        for index, target in enumerate(targets, start=1):
+            try:
+                fetched = self.fetch_now(target.doi)
+                entry: dict[str, Any] = {
+                    "doi": target.doi,
+                    "status": "ok",
+                    "raw_path": fetched.raw_path,
+                }
+                if download_pdf:
+                    try:
+                        entry["pdf"] = self.fetch_pdf(fetched.paper_id)
+                    except Exception as exc:  # noqa: BLE001 - XML success stands
+                        entry["pdf_error"] = _clean_error_message(exc)
+                succeeded += 1
+            except Exception as exc:  # noqa: BLE001 - per-paper isolation
+                failed += 1
+                entry = {
+                    "doi": target.doi,
+                    "status": "failed",
+                    "message": _clean_error_message(exc),
+                }
+            results.append(entry)
+            if on_progress is not None:
+                on_progress(index, len(targets), entry)
+        return {
+            "requested": len(targets),
+            "succeeded": succeeded,
+            "failed": failed,
+            "results": results,
+        }
 
     def pdf_enabled(self, override: bool | None = None) -> bool:
         if override is not None:

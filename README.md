@@ -372,6 +372,8 @@ http://127.0.0.1:8765/docs
 lit-harvest version
 lit-harvest demo [--reset] [--clear]
 lit-harvest storage show
+lit-harvest policy show
+lit-harvest cache
 lit-harvest storage set PATH [--migrate/--no-migrate] [--overwrite]
 lit-harvest storage reset [--migrate/--no-migrate]
 lit-harvest doctor  [--network] [--json] [--config PATH]
@@ -388,6 +390,9 @@ lit-harvest fetch-session SESSION_ID [--pdf] [--config PATH]
 
 lit-harvest fetch DOI|FILE [--doi-column COLUMN] [--pdf|--no-pdf] [--config PATH]
 lit-harvest parse [--limit N] [--force] [--config PATH]
+lit-harvest cache [--config PATH]
+lit-harvest cleanup [--yes] [--drop-normalized] [--config PATH]
+lit-harvest rebuild --missing [--limit N] [--pdf/--no-pdf] [--config PATH]
 lit-harvest export PATH [--format csv|json|jsonl] [--config PATH]
 lit-harvest jobs [--status STATUS] [--limit N] [--config PATH]
 lit-harvest quota [--config PATH]
@@ -688,6 +693,62 @@ providers:
 > **Setting `unlimited: true` is a declaration that you hold written authorization.** Publishers
 > reserve the right to monitor usage volumes and patterns, and to suspend access on suspicion of
 > unauthorized use.
+
+## Full-Text Cache Lifecycle
+
+Publisher agreements commonly require deleting the **original full text** when a project ends,
+while allowing derived results to be kept. This tool separates the two:
+
+```text
+papers + normalized JSON   permanent (keep)
+raw XML / PDF              temporary cache (deletable, rebuildable)
+```
+
+### Check what is stored
+
+```bash
+lit-harvest cache
+```
+
+```text
+Papers               │ 372
+Raw cached           │   1
+Raw missing          │ 371
+Normalized available │   1
+Disk used            │ 4.05 MB
+```
+
+### Delete the raw cache at the end of a project
+
+```bash
+lit-harvest cleanup --yes
+```
+
+This removes `raw/elsevier_xml.xml` and `raw/elsevier_pdf.pdf` but keeps:
+
+- the paper record and DOI
+- `normalized/paper.json`
+- `state.json` (provenance)
+
+Add `--drop-normalized` to keep metadata only.
+
+### Restore when you need the original again
+
+```bash
+lit-harvest rebuild --missing --limit 50
+```
+
+Papers no longer need to be rediscovered: the DOI is already in the database, so the tool re-fetches
+just the documents whose cache is gone. Rebuild honours the same pacing policy as normal downloads.
+
+### Why this shape
+
+| Goal | How it is met |
+| --- | --- |
+| Keep a usable corpus | Paper metadata and normalized documents persist |
+| Respect retention terms | Raw publisher files can be deleted at any time |
+| Avoid manual re-downloading | One command restores only what is missing |
+| Stay inside usage limits | Rebuild is paced by the same policy engine |
 
 ## Storage Location
 

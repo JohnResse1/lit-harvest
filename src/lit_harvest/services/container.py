@@ -14,6 +14,7 @@ from lit_harvest.scheduler.queue import QueueControl
 from lit_harvest.scheduler.scheduler import Scheduler
 from lit_harvest.scheduler.worker import Worker
 from lit_harvest.services.acquisition import AcquisitionService
+from lit_harvest.services.cache import CacheService
 from lit_harvest.services.dashboard import DashboardService
 from lit_harvest.services.maintenance import MaintenanceService
 from lit_harvest.services.normalization import NormalizationService
@@ -42,12 +43,14 @@ class ServiceContainer:
         self.providers: ProviderRegistry = self._build_providers()
         self.papers = PaperService(self.database)
         self.normalization = NormalizationService(self.database, self.storage)
+        self.cache = CacheService(self.database, self.storage)
         self.acquisition = AcquisitionService(
             config=self.config,
             database=self.database,
             storage=self.storage,
             providers=self.providers,
             normalization=self.normalization,
+            cache=self.cache,
         )
         self.scheduler = Scheduler(
             self.database,

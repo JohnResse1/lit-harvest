@@ -20,6 +20,8 @@ GET  /api/overview
 GET  /api/doctor?network=false
 GET  /api/worker
 GET  /api/policy
+GET  /api/cache
+POST /api/cache/cleanup
 POST /api/worker/tick
 
 GET  /api/papers?limit=&offset=&stage=
@@ -91,6 +93,12 @@ Elsevier `<service-error>` XML) are never forwarded to the browser.
 `GET /api/policy` reports each provider's pacing rules and today's usage, so the dashboard can show
 how much of the daily allowance remains. Publishers meter access per institution; the defaults are
 intentionally gentle.
+
+## Full-text cache
+
+`GET /api/cache` reports how much raw full text is stored and what is missing.
+`POST /api/cache/cleanup` deletes the raw cache while keeping metadata and normalized documents
+(pass `?keep_normalized=false` to drop those too).
 
 ## UI routes
 

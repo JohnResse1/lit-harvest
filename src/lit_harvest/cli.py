@@ -630,6 +630,109 @@ def parse(
 
 
 @app.command()
+def cache(
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Show how much full text is cached locally."""
+    summary = _container(config).cache.summary()
+    table = Table(title="Local full-text cache")
+    table.add_column("Item")
+    table.add_column("Value")
+    table.add_row("Papers", str(summary["papers"]))
+    table.add_row("Raw cached", str(summary["raw_cached"]))
+    table.add_row("Raw missing", str(summary["raw_missing"]))
+    table.add_row("Normalized available", str(summary["normalized_available"]))
+    table.add_row("Disk used", f"{summary['cached_megabytes']} MB")
+    console.print(table)
+    if summary["raw_missing"]:
+        console.print(
+            "\n[dim]Missing raw files can be restored with `lit-harvest rebuild --missing`.[/dim]"
+        )
+
+
+@app.command()
+def cleanup(
+    yes: Annotated[bool, typer.Option("--yes", help="Skip the confirmation prompt.")] = False,
+    drop_normalized: Annotated[
+        bool,
+        typer.Option(
+            "--drop-normalized", help="Also delete normalized JSON, keeping only metadata."
+        ),
+    ] = False,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Delete cached raw full text while keeping metadata and results.
+
+    Publisher agreements usually require removing the original full text when a
+    project ends. Derived data may be retained.
+    """
+    container = _container(config)
+    summary = container.cache.summary()
+    if summary["raw_cached"] == 0:
+        console.print("Nothing to clean: no raw full text is cached.")
+        return
+    console.print(
+        f"About to delete raw full text for [bold]{summary['raw_cached']}[/bold] paper(s) "
+        f"({summary['cached_megabytes']} MB)."
+    )
+    console.print(
+        "Metadata and normalized documents are kept"
+        + ("" if not drop_normalized else " (except normalized JSON)")
+        + "."
+    )
+    if not yes:
+        confirmed = typer.confirm("Continue?")
+        if not confirmed:
+            console.print("Cancelled.")
+            return
+    result = container.cache.cleanup_raw(keep_normalized=not drop_normalized)
+    _print_json(result.to_dict())
+
+
+@app.command()
+def rebuild(
+    missing: Annotated[
+        bool, typer.Option("--missing", help="Only rebuild papers whose raw cache is gone.")
+    ] = True,
+    pdf: Annotated[bool, typer.Option("--pdf/--no-pdf", help="Also restore PDFs.")] = False,
+    limit: Annotated[int, typer.Option("--limit", min=1)] = 50,
+    yes: Annotated[bool, typer.Option("--yes", help="Skip the confirmation prompt.")] = False,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Re-fetch raw full text for papers whose cache was deleted."""
+    container = _container(config)
+    targets = container.cache.missing_raw(limit=limit)
+    if not targets:
+        console.print("Nothing to rebuild: every paper with a DOI still has its raw file.")
+        return
+    console.print(
+        f"Will re-download full text for [bold]{len(targets)}[/bold] paper(s) (up to {limit})."
+    )
+    interval = container.policy.policy_for("elsevier").min_interval("article_retrieval")
+    console.print(
+        f"Pacing policy: {interval:g}s between requests. Ctrl+C is safe; progress is saved."
+    )
+    if not yes:
+        confirmed = typer.confirm("Continue?")
+        if not confirmed:
+            console.print("Cancelled.")
+            return
+
+    def progress(index: int, total: int, entry: dict[str, Any]) -> None:
+        console.print(f"  [{index}/{total}] {entry.get('doi')} -> {entry.get('status')}")
+
+    try:
+        result = container.acquisition.rebuild_missing(
+            limit=limit, download_pdf=pdf, on_progress=progress
+        )
+    except Exception as exc:  # noqa: BLE001 - translated into guidance
+        _explain(exc)
+        return
+    _print_json({k: v for k, v in result.items() if k != "results"})
+    console.print(f"Summary: {result['succeeded']} restored, {result['failed']} failed.")
+
+
+@app.command()
 def export(
     path: Annotated[str, typer.Argument(help="Destination .csv, .json, or .jsonl path.")],
     format: Annotated[str | None, typer.Option("--format")] = None,
