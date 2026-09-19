@@ -17,6 +17,7 @@ class SearchRequest(BaseModel):
     max_results: int = 100
     start_year: int | None = None
     end_year: int | None = None
+    provider: str | None = None
 
 
 @router.post("")
@@ -29,6 +30,7 @@ def run_search(request: SearchRequest, container: ContainerDep) -> dict[str, Any
             max_results=request.max_results,
             start_year=request.start_year,
             end_year=request.end_year,
+            provider_name=request.provider,
         )
     except Exception as exc:  # noqa: BLE001 - surfaced to the local caller
         raise HTTPException(

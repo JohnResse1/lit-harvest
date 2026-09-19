@@ -1,7 +1,9 @@
 storage:
   root: ./data
+
 database:
   url: sqlite:///./data/lit_harvest.db
+
 scheduler:
   retry:
     max_attempts: 4
@@ -11,40 +13,63 @@ scheduler:
   quota:
     warning_ratio: 0.30
     low_ratio: 0.10
+
 server:
   host: 127.0.0.1
   port: 8765
-providers:
-  elsevier:
-    enabled: true
-    # Optional: also save the publisher PDF alongside the canonical FULL XML.
-    download_pdf: false
 
-    # Usage pacing. Publishers meter access per INSTITUTION, not per person, so
-    # one aggressive client can affect every researcher at your university.
-    # These defaults are deliberately gentle. Raise them only if your library
-    # or the publisher has given you written authorization.
-    policy:
-      unlimited: false
-      fulltext_min_interval_seconds: 60
-      pdf_min_interval_seconds: 120
-      search_min_interval_seconds: 5
-      fulltext_daily_limit: 100
-      pdf_daily_limit: 50
-      search_daily_limit: 200
-      jitter_ratio: 0.25
-    services:
-      scopus_search:
-        enabled: true
-      article_retrieval:
-        enabled: true
-      # Used only when PDF download is enabled.
-      article_pdf:
-        enabled: true
-    credentials:
-      - name: university_primary
-        # Run: lit-harvest auth set elsevier university_primary
-        # Secrets are stored in <project>/.lit-harvest/secrets.json with mode 0600.
-        secret_ref: file:elsevier:university_primary
-        institution: HIT
-        quota_scope: institution
+providers:
+  entries:
+    # ------------------------------------------------------------------
+    # OpenAlex: key-free, cross-publisher discovery and metadata.
+    # Covers Elsevier, Springer, Nature, ACS, Wiley and more. Metadata only.
+    # ------------------------------------------------------------------
+    openalex:
+      enabled: true
+      # Optional: joining the polite pool gives faster, more reliable responses.
+      contact_email: null
+      policy:
+        search_min_interval_seconds: 0.5
+        search_daily_limit: 2000
+        # OpenAlex serves metadata only, so full-text ceilings do not apply.
+        fulltext_daily_limit: null
+        pdf_daily_limit: null
+
+    # ------------------------------------------------------------------
+    # Elsevier: Scopus Search STANDARD + ScienceDirect FULL XML / PDF.
+    # Requires your own API key: lit-harvest auth set elsevier university_primary
+    # ------------------------------------------------------------------
+    elsevier:
+      enabled: true
+      # Optional: also save the publisher PDF alongside the canonical FULL XML.
+      download_pdf: false
+
+      # Usage pacing. Publishers meter access per INSTITUTION, not per person,
+      # so one aggressive client can affect every researcher at your university.
+      # Raise these only with written authorization from your library.
+      policy:
+        unlimited: false
+        fulltext_min_interval_seconds: 60
+        pdf_min_interval_seconds: 120
+        search_min_interval_seconds: 5
+        fulltext_daily_limit: 100
+        pdf_daily_limit: 50
+        search_daily_limit: 200
+        jitter_ratio: 0.25
+
+      services:
+        scopus_search:
+          enabled: true
+        article_retrieval:
+          enabled: true
+        # Used only when PDF download is enabled.
+        article_pdf:
+          enabled: true
+
+      credentials:
+        - name: university_primary
+          # Run: lit-harvest auth set elsevier university_primary
+          # Secrets are stored in <project>/.lit-harvest/secrets.json (mode 0600).
+          secret_ref: file:elsevier:university_primary
+          institution: HIT
+          quota_scope: institution

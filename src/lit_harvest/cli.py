@@ -255,10 +255,21 @@ def policy_show(
         ("article_retrieval", "Full text"),
         ("article_pdf", "PDF"),
         ("scopus_search", "Search"),
+        ("works_search", "Search"),
     ]
     for provider in container.config.providers.names():
         policy = container.policy.policy_for(provider)
+        registered = container.providers.get(provider)
+        # Only show services this provider actually offers.
         for service, label in service_map:
+            if service == "scopus_search" and not getattr(registered, "supports_fulltext", False):
+                continue
+            if service == "works_search" and getattr(registered, "supports_fulltext", False):
+                continue
+            if service in {"article_retrieval", "article_pdf"} and not getattr(
+                registered, "supports_fulltext", False
+            ):
+                continue
             limit = policy.daily_limit(service)
             used = container.policy.usage_today(provider, service)
             interval = policy.min_interval(service)
@@ -471,6 +482,13 @@ def search(
             help="Download every candidate of an earlier session id, then exit.",
         ),
     ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option(
+            "--provider",
+            help="Discovery provider: elsevier (Scopus) or openalex (key-free).",
+        ),
+    ] = None,
     config: Annotated[str | None, typer.Option("--config")] = None,
 ) -> None:
     """Search Scopus and preview the results (nothing is downloaded yet)."""
@@ -495,6 +513,7 @@ def search(
             start_year=start_year,
             end_year=end_year,
             export=export,
+            provider_name=provider,
         )
     except Exception as exc:  # noqa: BLE001 - translated into user guidance
         _explain(exc)
@@ -627,6 +646,28 @@ def parse(
         _print_json(_container(config).acquisition.parse_pending(limit=limit, force=force))
     except Exception as exc:  # noqa: BLE001 - translated into user guidance
         _explain(exc)
+
+
+@app.command()
+def enrich(
+    limit: Annotated[int, typer.Option("--limit", min=1)] = 100,
+    all_papers: Annotated[
+        bool, typer.Option("--all", help="Refresh metadata even when a title exists.")
+    ] = False,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+) -> None:
+    """Fill missing titles, authors, and abstracts from OpenAlex (no key needed)."""
+    container = _container(config)
+    try:
+        result = container.acquisition.enrich_metadata(limit=limit, only_incomplete=not all_papers)
+    except Exception as exc:  # noqa: BLE001 - translated into guidance
+        _explain(exc)
+        return
+    _print_json({k: v for k, v in result.items() if k != "results"})
+    console.print(
+        f"Enriched {result['enriched']} paper(s); skipped {result['skipped']}; "
+        f"failed {result['failed']}."
+    )
 
 
 @app.command()

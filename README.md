@@ -374,6 +374,7 @@ lit-harvest demo [--reset] [--clear]
 lit-harvest storage show
 lit-harvest policy show
 lit-harvest cache
+lit-harvest enrich [--limit N] [--all]
 lit-harvest storage set PATH [--migrate/--no-migrate] [--overwrite]
 lit-harvest storage reset [--migrate/--no-migrate]
 lit-harvest doctor  [--network] [--json] [--config PATH]
@@ -383,7 +384,7 @@ lit-harvest auth list   [--config PATH]
 lit-harvest auth test   [provider] [name] [--config PATH]
 lit-harvest auth remove [provider] [name] [--secret-ref REF] [--config PATH]
 
-lit-harvest search --query QUERY --max-results N
+lit-harvest search --query QUERY --max-results N [--provider elsevier|openalex]
                    [--start-year N] [--end-year N] [--export PATH]
                    [--download-session SESSION_ID] [--config PATH]
 lit-harvest fetch-session SESSION_ID [--pdf] [--config PATH]
@@ -650,6 +651,85 @@ path (`.lit-harvest/`, `config.yaml`, `data/`, `.env`) is tracked by Git. Enforc
 See [SECURITY.md](SECURITY.md). Never open a public issue for an active credential leak — revoke the
 key first.
 
+## Providers
+
+Literature Harvester separates **discovery** from **full-text retrieval**, because few publishers
+offer a search API at all.
+
+| Provider | Search | Full text | PDF | Credentials |
+| --- | --- | --- | --- | --- |
+| **OpenAlex** | yes | – | – | **none required** |
+| **Elsevier** | yes (Scopus) | yes (ScienceDirect) | yes | API key |
+
+### OpenAlex (no key required)
+
+OpenAlex indexes works from essentially every publisher (Elsevier, Springer, Nature, ACS, Wiley…)
+and publishes the metadata under CC0. It needs no account, so it is enabled by default.
+
+```bash
+lit-harvest search --provider openalex --query 'solid-state battery' --max-results 20
+```
+
+It returns fields that Scopus `STANDARD` does not:
+
+| Field | Scopus STANDARD | OpenAlex |
+| --- | --- | --- |
+| Authors | first author only | complete list with ORCID |
+| Abstract | not included | full text of the abstract |
+| Citation count | yes | yes |
+| Open-access status | limited | status, license, PDF URL |
+| Cross-publisher | Elsevier only | all major publishers |
+
+OpenAlex is **metadata only**. It never serves full text; use it to discover and enrich, then fetch
+full text through an entitled publisher provider.
+
+### Selecting a discovery provider
+
+```bash
+lit-harvest search --provider openalex  --query '...'    # key-free, all publishers
+lit-harvest search --provider elsevier  --query '...'    # Scopus syntax, Elsevier only
+```
+
+The API accepts the same choice:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"solid-state battery","max_results":20,"provider":"openalex"}'
+```
+
+### Enriching existing records
+
+Papers imported by DOI alone often have no title. OpenAlex can fill those in without spending any
+Scopus quota:
+
+```bash
+lit-harvest enrich              # only records missing a title
+lit-harvest enrich --all        # refresh everything
+```
+
+```text
+Enriched 1 paper(s); skipped 0; failed 0.
+```
+
+### Configuration
+
+```yaml
+providers:
+  entries:
+    openalex:
+      enabled: true
+      contact_email: you@example.com   # optional; joins the polite pool
+    elsevier:
+      enabled: true
+      credentials:
+        - name: university_primary
+          secret_ref: file:elsevier:university_primary
+```
+
+An unknown provider name in the config is ignored rather than fatal, so a shared configuration file
+stays usable on machines that have fewer providers implemented.
+
 ## Usage Policy
 
 Publishers meter API access **per institution**, not per person. One aggressive client can therefore
@@ -708,6 +788,7 @@ raw XML / PDF              temporary cache (deletable, rebuildable)
 
 ```bash
 lit-harvest cache
+lit-harvest enrich [--limit N] [--all]
 ```
 
 ```text

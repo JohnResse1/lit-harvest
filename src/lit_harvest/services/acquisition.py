@@ -17,6 +17,7 @@ from lit_harvest.models import (
     JobCreate,
     JobStatus,
     PaperCreate,
+    PaperIdentifiers,
     PaperStage,
     TaskType,
 )
@@ -104,8 +105,18 @@ class AcquisitionService:
         start_year: int | None = None,
         end_year: int | None = None,
         export: str | None = None,
+        provider_name: str | None = None,
     ) -> SearchResult:
-        provider = self.providers.first_with_capability("supports_search")
+        provider: Any | None
+        if provider_name:
+            selected = self.providers.get(provider_name)
+            if not getattr(selected, "supports_search", False):
+                raise ProviderUnavailableError(
+                    f"{provider_name} does not support literature search."
+                )
+            provider = selected
+        else:
+            provider = self.providers.first_with_capability("supports_search")
         if provider is None:
             raise ProviderUnavailableError(
                 "No configured provider supports literature search. "
@@ -461,6 +472,63 @@ class AcquisitionService:
                 "No configured provider can retrieve full text for this DOI."
             )
         return self.providers.get(route.provider)
+
+    def enrich_metadata(self, *, limit: int = 100, only_incomplete: bool = True) -> dict[str, Any]:
+        """Fill missing bibliographic fields using an open metadata provider.
+
+        OpenAlex needs no credentials, so this works for every user. It fixes
+        records imported by DOI alone, which otherwise show up without a title,
+        authors, or abstract.
+        """
+        provider = None
+        for candidate in self.providers.with_capability("supports_metadata"):
+            if candidate.name != "elsevier" and hasattr(candidate, "fetch_metadata"):
+                provider = candidate
+                break
+        if provider is None:
+            raise ProviderUnavailableError(
+                "No metadata provider is available. Enable OpenAlex in config.yaml."
+            )
+
+        enriched = skipped = failed = 0
+        results: list[dict[str, Any]] = []
+        for paper in self.database.list_papers(limit=limit):
+            if not paper.doi:
+                skipped += 1
+                continue
+            if only_incomplete and paper.title:
+                skipped += 1
+                continue
+            try:
+                payload = provider.fetch_metadata(paper.doi)
+            except Exception as exc:  # noqa: BLE001 - per-paper isolation
+                failed += 1
+                results.append(
+                    {"doi": paper.doi, "status": "failed", "message": _clean_error_message(exc)}
+                )
+                continue
+            if not payload:
+                skipped += 1
+                continue
+            update = PaperCreate(
+                doi=payload.get("doi") or paper.doi,
+                title=payload.get("title"),
+                journal=payload.get("journal"),
+                publication_year=payload.get("publication_year"),
+                publisher=payload.get("publisher"),
+                document_type=payload.get("document_type"),
+                identifiers=PaperIdentifiers.model_validate(payload.get("identifiers") or {}),
+                extra=payload.get("extra") or {},
+            )
+            self.database.update_paper_metadata(paper.id, update)
+            enriched += 1
+            results.append({"doi": paper.doi, "status": "ok", "title": update.title})
+        return {
+            "enriched": enriched,
+            "skipped": skipped,
+            "failed": failed,
+            "results": results,
+        }
 
     def rebuild_missing(
         self,

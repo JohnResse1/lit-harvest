@@ -365,6 +365,7 @@ lit-harvest demo [--reset] [--clear]
 lit-harvest storage show
 lit-harvest policy show
 lit-harvest cache
+lit-harvest enrich [--limit N] [--all]
 lit-harvest storage set PATH [--migrate/--no-migrate] [--overwrite]
 lit-harvest storage reset [--migrate/--no-migrate]
 lit-harvest doctor  [--network] [--json] [--config PATH]
@@ -374,7 +375,7 @@ lit-harvest auth list   [--config PATH]
 lit-harvest auth test   [provider] [name] [--config PATH]
 lit-harvest auth remove [provider] [name] [--secret-ref REF] [--config PATH]
 
-lit-harvest search --query QUERY --max-results N
+lit-harvest search --query QUERY --max-results N [--provider elsevier|openalex]
                    [--start-year N] [--end-year N] [--export PATH]
                    [--download-session SESSION_ID] [--config PATH]
 lit-harvest fetch-session SESSION_ID [--pdf] [--config PATH]
@@ -621,6 +622,78 @@ lit-harvest security scan
 
 详见 [SECURITY.md](SECURITY.md)。如果发生真实密钥泄漏，请先撤销密钥，不要开公开 Issue。
 
+## 提供商
+
+本工具把**检索**和**全文获取**分开，因为几乎没有几家出版社提供检索 API。
+
+| 提供商 | 检索 | 全文 | PDF | 凭证 |
+| --- | --- | --- | --- | --- |
+| **OpenAlex** | ✅ | – | – | **无需任何凭证** |
+| **Elsevier** | ✅（Scopus） | ✅（ScienceDirect） | ✅ | 需要 API Key |
+
+### OpenAlex（无需 Key）
+
+OpenAlex 索引了几乎所有出版社的论文（Elsevier、Springer、Nature、ACS、Wiley……），元数据以
+CC0 协议开放。它不需要账号，因此默认启用。
+
+```bash
+lit-harvest search --provider openalex --query 'solid-state battery' --max-results 20
+```
+
+它能提供 Scopus `STANDARD` 没有的字段：
+
+| 字段 | Scopus STANDARD | OpenAlex |
+| --- | --- | --- |
+| 作者 | 只有第一作者 | 完整列表（含 ORCID） |
+| 摘要 | 不提供 | 完整摘要 |
+| 引用数 | ✅ | ✅ |
+| 开放获取状态 | 有限 | 状态、许可证、PDF 链接 |
+| 跨出版社 | 仅 Elsevier | 所有主要出版社 |
+
+OpenAlex **只提供元数据**，不提供全文。用它来发现文献和补全元数据，全文仍走有权限的出版社。
+
+### 选择检索来源
+
+```bash
+lit-harvest search --provider openalex  --query '...'    # 无需 Key，覆盖所有出版社
+lit-harvest search --provider elsevier  --query '...'    # Scopus 语法，仅 Elsevier
+```
+
+接口同样支持：
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"solid-state battery","max_results":20,"provider":"openalex"}'
+```
+
+### 补全已有记录
+
+只导入 DOI 的文献往往没有标题。OpenAlex 可以补齐，且**不消耗 Scopus 配额**：
+
+```bash
+lit-harvest enrich              # 只补缺失标题的记录
+lit-harvest enrich --all        # 全部刷新
+```
+
+### 配置
+
+```yaml
+providers:
+  entries:
+    openalex:
+      enabled: true
+      contact_email: you@example.com   # 可选，加入 polite pool
+    elsevier:
+      enabled: true
+      credentials:
+        - name: university_primary
+          secret_ref: file:elsevier:university_primary
+```
+
+配置里出现本版本未实现的提供商名字时会被忽略，而不是报错，因此共享的配置文件在
+不同机器上都能用。
+
 ## 使用限速
 
 出版社的 API 访问是**按机构**计量的，不是按个人。一个客户端跑得太猛，可能拖慢甚至封禁同一所大学
@@ -675,6 +748,7 @@ raw XML / PDF              临时缓存（可删除、可重建）
 
 ```bash
 lit-harvest cache
+lit-harvest enrich [--limit N] [--all]
 ```
 
 ```text

@@ -115,6 +115,7 @@ class ProviderConfig(BaseModel):
     base_url: str | None = None
     timeout_seconds: float = 30.0
     download_pdf: bool = False
+    contact_email: str | None = None
     policy: PolicyConfig = Field(default_factory=PolicyConfig)
     services: dict[str, ServiceConfig] = Field(default_factory=dict)
     credentials: list[CredentialConfig] = Field(default_factory=list)
@@ -122,6 +123,19 @@ class ProviderConfig(BaseModel):
     def service_enabled(self, name: str) -> bool:
         service = self.services.get(name)
         return bool(service.enabled) if service else True
+
+
+class OpenAlexConfig(ProviderConfig):
+    """OpenAlex defaults. No API key is required; an email joins the polite pool."""
+
+    base_url: str = "https://api.openalex.org"
+    contact_email: str | None = None
+    services: dict[str, ServiceConfig] = Field(
+        default_factory=lambda: {
+            "works_search": ServiceConfig(),
+            "works_lookup": ServiceConfig(),
+        }
+    )
 
 
 class ElsevierConfig(ProviderConfig):
@@ -138,7 +152,8 @@ class ElsevierConfig(ProviderConfig):
 
 
 def _default_providers() -> dict[str, ProviderConfig]:
-    return {"elsevier": ElsevierConfig()}
+    # OpenAlex needs no credentials, so it is enabled out of the box.
+    return {"elsevier": ElsevierConfig(), "openalex": OpenAlexConfig()}
 
 
 class ProvidersConfig(BaseModel):
